@@ -1,0 +1,6 @@
+{
+  "email_type": "confirm_email",
+  "mail_data": {
+    "url": "test_url"
+  }
+}

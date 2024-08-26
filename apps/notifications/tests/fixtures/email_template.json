@@ -1,0 +1,20 @@
+[
+  {
+    "model": "notifications.emailtemplate",
+    "pk": 1,
+    "fields": {
+      "email_type": "confirm_email",
+      "subject": "Подтверждение адреса электронной почты",
+      "message": "Подтвердите адрес электронной почты по ссылке {url}"
+    }
+  },
+  {
+    "model": "notifications.emailtemplate",
+    "pk": 2,
+    "fields": {
+      "email_type": "password_reset",
+      "subject": "Восстановление пароля",
+      "message": "Восстановите пароль по ссылке {url}"
+    }
+  }
+]

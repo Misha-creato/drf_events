@@ -1,0 +1,6 @@
+{
+  "send_emails": true,
+  "email_type": "confirm_email",
+    "mail_data": {
+  }
+}
