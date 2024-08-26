@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+venv*/
+*.pyc
+
+# Django settings
+.env
+local_settings.py
+
+# Redis
+*.rdb
+
+# Logs
+logs/
+*.log
+
+# Media
+media/
+
+# Static files
+staticfiles/
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Database
+*.sqlite3
+
+# Compiled Python modules
+*.pyc
+
+# Translation files
+*.mo
+
+# macOS
+.DS_Store
