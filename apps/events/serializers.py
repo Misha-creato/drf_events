@@ -25,6 +25,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'name',
+            'slug',
             'city',
             'place',
             'address',
