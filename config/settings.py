@@ -248,4 +248,5 @@ EMAIL_USE_TLS = True
 
 FIXTURE_DIRS = (
     os.path.join(BASE_DIR, 'apps', 'notifications', 'tests', 'fixtures'),
+    os.path.join(BASE_DIR, 'apps', 'events', 'tests', 'fixtures'),
 )
