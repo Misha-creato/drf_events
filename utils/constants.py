@@ -10,7 +10,7 @@ EMAIL_TYPES = (
 CITIES = (
     ('Almaty', 'Алматы'),
     ('Astana', 'Астана'),
-    ('Karaganda', 'КАраганда'),
+    ('Karaganda', 'Караганда'),
     ('Shymkent', 'Шымкент'),
 )
 
