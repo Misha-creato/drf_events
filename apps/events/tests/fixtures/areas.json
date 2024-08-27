@@ -1,0 +1,32 @@
+[
+  {
+    "model": "events.area",
+    "pk": 1,
+    "fields": {
+      "name": "Test1",
+      "city": "Almaty",
+      "address": "Testing test",
+      "available": true
+    }
+  },
+  {
+    "model": "events.area",
+    "pk": 2,
+    "fields": {
+      "name": "Test2",
+      "city": "Astana",
+      "address": "test2 address",
+      "available": true
+    }
+  },
+  {
+    "model": "events.area",
+    "pk": 3,
+    "fields": {
+      "name": "Test3",
+      "city": "Shymkent",
+      "address": "Test3 address",
+      "available": true
+    }
+  }
+]
