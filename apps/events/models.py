@@ -63,6 +63,9 @@ class Category(models.Model):
 
 
 class Event(models.Model):
+    '''
+        min_price обновляется при изменении связанной записи в таблице landing
+    '''
     area = models.ForeignKey(
         verbose_name='Площадка',
         to=Area,
@@ -85,7 +88,7 @@ class Event(models.Model):
     end_at = models.DateTimeField(
         verbose_name='Дата и время окончания',
     )
-    age_limit = models.CharField(
+    age_limit = models.IntegerField(
         verbose_name='Возрастное огранчиение',
         choices=AGE_LIMITS,
     )
@@ -130,8 +133,7 @@ class Event(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
     class Meta:
@@ -173,6 +175,12 @@ class Landing(models.Model):
         verbose_name = 'Посадка'
         verbose_name_plural = 'Посадки'
 
+        unique_together = (
+            'event',
+            'section',
+            'row',
+        )
+
 
 class Ticket(models.Model):
     uuid = models.UUIDField(
@@ -184,14 +192,35 @@ class Ticket(models.Model):
     landing = models.ForeignKey(
         verbose_name='Посадка',
         to=Landing,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name='tickets',
+        null=True,
     )
     user = models.ForeignKey(
         verbose_name='Пользователь',
         to=User,
         on_delete=models.CASCADE,
         related_name='tickets',
+    )
+    event_name = models.CharField(
+        verbose_name='Наименование мероприятия',
+    )
+    section = models.CharField(
+        verbose_name='Секция',
+        max_length=64,
+        null=True,
+        blank=True
+    )
+    row = models.CharField(
+        verbose_name='Ряд',
+        max_length=64,
+        null=True,
+        blank=True
+    )
+    price = models.DecimalField(
+        verbose_name='Цена за место',
+        max_digits=7,
+        decimal_places=2,
     )
     seat = models.CharField(
         verbose_name='Место',
@@ -206,6 +235,14 @@ class Ticket(models.Model):
         verbose_name='Дата и время покупки',
         auto_now_add=True,
     )
+
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.section = self.landing.section
+            self.row = self.landing.row
+            self.price = self.landing.price
+            self.event_name = self.landing.event.name
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'tickets'
