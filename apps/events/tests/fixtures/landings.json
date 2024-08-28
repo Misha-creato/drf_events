@@ -1,0 +1,54 @@
+[
+  {
+    "model": "events.landing",
+    "pk": 1,
+    "fields": {
+      "event": 1,
+      "section": null,
+      "row": null,
+      "seat_type": "Ordinary",
+      "seats": [],
+      "quantity": 30,
+      "price": "5000.00"
+    }
+  },
+  {
+    "model": "events.landing",
+    "pk": 2,
+    "fields": {
+      "event": 1,
+      "section": null,
+      "row": null,
+      "seat_type": "VIP",
+      "seats": [],
+      "quantity": 10,
+      "price": "8000.00"
+    }
+  },
+  {
+    "model": "events.landing",
+    "pk": 3,
+    "fields": {
+      "event": 1,
+      "section": null,
+      "row": null,
+      "seat_type": "Discounted",
+      "seats": [],
+      "quantity": 10,
+      "price": "3000.00"
+    }
+  },
+    {
+    "model": "events.landing",
+    "pk": 4,
+    "fields": {
+      "event": 2,
+      "section": null,
+      "row": null,
+      "seat_type": "VIP",
+      "seats": [],
+      "quantity": 30,
+      "price": "7000.00"
+    }
+  }
+]
