@@ -28,3 +28,9 @@ TICKET_STATUSES = (
     ('Used', 'Использованный'),
     ('Expired', 'Просроченный'),
 )
+
+SEAT_TYPES = (
+    ('Ordinary', 'Обычное'),
+    ('VIP', 'ВИП'),
+    ('Discounted', 'Уцененное'),
+)
