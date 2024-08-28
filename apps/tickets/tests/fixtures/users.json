@@ -1,0 +1,19 @@
+[
+  {
+    "model": "users.customuser",
+    "pk": 1,
+    "fields": {
+      "password": "pbkdf2_sha256$600000$2UzdrY1MP4X4GIO0Kn37Qm$YmPikSKEnCQOY1oHlYuFJXN3oKGu3LWgzesBnTnNUtA=",
+      "last_login": "2024-08-26T11:20:25.391Z",
+      "email": "test@cc.com",
+      "is_superuser": false,
+      "is_staff": false,
+      "is_active": true,
+      "email_confirmed": false,
+      "url_hash": null,
+      "date_joined": "2024-08-26T11:19:23.819Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  }
+]

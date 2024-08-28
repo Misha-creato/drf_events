@@ -1,0 +1,62 @@
+[
+  {
+    "model": "tickets.ticket",
+    "pk": "d808fd83-3499-4846-a33b-32a4d180f889",
+    "fields": {
+      "landing": 4,
+      "user": 1,
+      "event_name": "Testing test1 another event",
+      "section": null,
+      "row": null,
+      "price": "7000.00",
+      "seat": "8",
+      "status": "Active",
+      "bought_at": "2024-08-28T13:16:09.020Z"
+    }
+  },
+  {
+    "model": "tickets.ticket",
+    "pk": "d83c3bbe-9b79-48c0-b165-e2799be3e16a",
+    "fields": {
+      "landing": 1,
+      "user": 1,
+      "event_name": "Test1 event in Almaty",
+      "section": null,
+      "row": null,
+      "price": "5000.00",
+      "seat": "1",
+      "status": "Active",
+      "bought_at": "2024-08-28T13:17:28.838Z"
+    }
+  },
+  {
+    "model": "tickets.ticket",
+    "pk": "d868d304-f37a-46f2-ad68-a03f7492f62c",
+    "fields": {
+      "landing": 2,
+      "user": 1,
+      "event_name": "Test1 event in Almaty",
+      "section": null,
+      "row": null,
+      "price": "8000.00",
+      "seat": "7",
+      "status": "Active",
+      "bought_at": "2024-08-28T13:13:59.374Z"
+    }
+  },
+  {
+    "model": "tickets.ticket",
+    "pk": "eddf761d-840f-423b-ab51-b3534d74345d",
+    "fields": {
+      "landing": 1,
+      "user": 1,
+      "event_name": "Test1 event in Almaty",
+      "section": null,
+      "row": null,
+      "price": "5000.00",
+      "seat": "5",
+      "status": "Active",
+      "bought_at": "2024-08-28T13:19:55.739Z"
+    }
+  }
+]
