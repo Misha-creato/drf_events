@@ -1,5 +1,3 @@
-import uuid
-
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
@@ -8,7 +6,7 @@ from django.utils.text import slugify
 from utils.constants import (
     CITIES,
     AGE_LIMITS,
-    TICKET_STATUSES,
+    SEAT_TYPES,
 )
 
 
@@ -64,8 +62,10 @@ class Category(models.Model):
 
 class Event(models.Model):
     '''
-        min_price обновляется при изменении связанной записи в таблице landing
+        min_price обновляется через сигнал в events.signals
+        при изменении связанной записи в таблице landing
     '''
+
     area = models.ForeignKey(
         verbose_name='Площадка',
         to=Area,
@@ -161,6 +161,16 @@ class Landing(models.Model):
         null=True,
         blank=True,
     )
+    seat_type = models.CharField(
+        verbose_name='Тип места',
+        choices=SEAT_TYPES,
+        default=SEAT_TYPES[0],
+    )
+    seats = models.JSONField(
+        verbose_name='Список мест',
+        default=list,
+        blank=True,
+    )
     quantity = models.PositiveIntegerField(
         verbose_name='Количество мест',
     )
@@ -169,6 +179,9 @@ class Landing(models.Model):
         max_digits=7,
         decimal_places=2,
     )
+
+    def __str__(self):
+        return f'{self.event.name} - {self.seat_type}'
 
     class Meta:
         db_table = 'landings'
@@ -179,72 +192,7 @@ class Landing(models.Model):
             'event',
             'section',
             'row',
+            'seat_type',
         )
 
 
-class Ticket(models.Model):
-    uuid = models.UUIDField(
-        verbose_name='Идентификатор',
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    landing = models.ForeignKey(
-        verbose_name='Посадка',
-        to=Landing,
-        on_delete=models.SET_NULL,
-        related_name='tickets',
-        null=True,
-    )
-    user = models.ForeignKey(
-        verbose_name='Пользователь',
-        to=User,
-        on_delete=models.CASCADE,
-        related_name='tickets',
-    )
-    event_name = models.CharField(
-        verbose_name='Наименование мероприятия',
-    )
-    section = models.CharField(
-        verbose_name='Секция',
-        max_length=64,
-        null=True,
-        blank=True
-    )
-    row = models.CharField(
-        verbose_name='Ряд',
-        max_length=64,
-        null=True,
-        blank=True
-    )
-    price = models.DecimalField(
-        verbose_name='Цена за место',
-        max_digits=7,
-        decimal_places=2,
-    )
-    seat = models.CharField(
-        verbose_name='Место',
-        max_length=32,
-    )
-    status = models.CharField(
-        verbose_name='Статус использования',
-        choices=TICKET_STATUSES,
-        default=TICKET_STATUSES[0],
-    )
-    bought_at = models.DateTimeField(
-        verbose_name='Дата и время покупки',
-        auto_now_add=True,
-    )
-
-    def save(self, *args, **kwargs):
-        if not self.uuid:
-            self.section = self.landing.section
-            self.row = self.landing.row
-            self.price = self.landing.price
-            self.event_name = self.landing.event.name
-        super().save(*args, **kwargs)
-
-    class Meta:
-        db_table = 'tickets'
-        verbose_name = 'Билет'
-        verbose_name_plural = 'Билеты'
