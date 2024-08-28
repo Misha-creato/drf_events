@@ -15,6 +15,11 @@ def get_all_events(request: Any, filter_backends: list, view: Any) -> (int, list
     '''
     Получение списка всех мероприятий
 
+    Args:
+        request: запрос
+        filter_backends: список фильтров для фильтрации, поиска и сортировки
+        view: представление
+
     Returns:
         Код статуса и список данных
         200,
@@ -33,10 +38,10 @@ def get_all_events(request: Any, filter_backends: list, view: Any) -> (int, list
                 "quantity": 50,
                 "available_tickets": 45,
                 "description": "Description"
-            },
-            ....
+            }
         ]
     '''
+
     logger.info(
         msg='Получение списка активных мероприятий',
     )
@@ -77,16 +82,31 @@ def get_all_events(request: Any, filter_backends: list, view: Any) -> (int, list
 
 def get_event(slug: str) -> (int, dict):
     '''
-    Получение списка мероприятия по слагу
+    Получение мероприятия по слагу
+
+    Args:
+        slug: слаг мероприятия
 
     Returns:
         Код статуса и словарь данных
         200,
         {
             "name": "Testing test2 event",
-            ....
-        },
+            "slug": "testing-test2-event",
+            "city": "Astana",
+            "place": "Test2",
+            "address": "test2 address",
+            "start_at": "2024-08-28T00:00:00+05:00",
+            "end_at": "2024-08-29T04:00:00+05:00",
+            "age_limit": 0,
+            "category": "Театр",
+            "min_price": 4000,
+            "quantity": 50,
+            "available_tickets": 45,
+            "description": "Description"
+        }
     '''
+
     logger.info(
         msg=f'Получение мероприятия по слагу {slug}',
     )
