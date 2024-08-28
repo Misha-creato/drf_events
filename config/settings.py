@@ -69,6 +69,7 @@ PROJECT_APPS = [
     'users',
     'notifications',
     'events',
+    'tickets',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS
@@ -249,4 +250,5 @@ EMAIL_USE_TLS = True
 FIXTURE_DIRS = (
     os.path.join(BASE_DIR, 'apps', 'notifications', 'tests', 'fixtures'),
     os.path.join(BASE_DIR, 'apps', 'events', 'tests', 'fixtures'),
+    os.path.join(BASE_DIR, 'apps', 'tickets', 'tests', 'fixtures'),
 )
