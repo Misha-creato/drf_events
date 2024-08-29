@@ -24,6 +24,9 @@ class TicketView(APIView):
             data=data,
         )
 
+
+class TicketQrView(APIView):
+
     def post(self, request):
         data = request.data
         status_code, response_data = check_ticket_qr(
