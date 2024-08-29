@@ -161,16 +161,6 @@ class Landing(models.Model):
         null=True,
         blank=True,
     )
-    seat_type = models.CharField(
-        verbose_name='Тип места',
-        choices=SEAT_TYPES,
-        default=SEAT_TYPES[0],
-    )
-    seats = models.JSONField(
-        verbose_name='Список мест',
-        default=list,
-        blank=True,
-    )
     quantity = models.PositiveIntegerField(
         verbose_name='Количество мест',
     )
@@ -181,7 +171,7 @@ class Landing(models.Model):
     )
 
     def __str__(self):
-        return f'{self.event.name} - {self.seat_type}'
+        return f'{self.event.name} | секция {self.section} | ряд {self.row}'
 
     class Meta:
         db_table = 'landings'
@@ -192,7 +182,39 @@ class Landing(models.Model):
             'event',
             'section',
             'row',
-            'seat_type',
         )
 
 
+class SpecialSeat(models.Model):
+    landing = models.ForeignKey(
+        verbose_name='Посадка',
+        to=Landing,
+        on_delete=models.CASCADE,
+        related_name='special_seats',
+    )
+    seat = models.CharField(
+        verbose_name='Место',
+        max_length=32,
+    )
+    price = models.DecimalField(
+        verbose_name='Цена за место',
+        max_digits=7,
+        decimal_places=2,
+    )
+    seat_type = models.CharField(
+        verbose_name='Тип места',
+        choices=SEAT_TYPES,
+    )
+
+    def __str__(self):
+        return f'{self.seat_type} {self.seat}'
+
+    class Meta:
+        db_table = 'special_seats'
+        verbose_name = 'Особенное место'
+        verbose_name_plural = 'Особенные места'
+
+        unique_together = (
+            'landing',
+            'seat',
+        )
