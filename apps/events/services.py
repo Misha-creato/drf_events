@@ -3,7 +3,10 @@ from typing import Any
 from django.utils import timezone
 
 from events.models import Event
-from events.serializers import EventSerializer
+from events.serializers import (
+    EventSerializer,
+    EventLandingSerializer,
+)
 
 from utils.logger import get_logger
 
@@ -129,7 +132,7 @@ def get_event(slug: str) -> (int, dict):
         )
         return 404, {}
 
-    response_data = EventSerializer(
+    response_data = EventLandingSerializer(
         instance=event,
     ).data
     logger.info(
