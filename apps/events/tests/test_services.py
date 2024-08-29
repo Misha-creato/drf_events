@@ -21,7 +21,10 @@ CUR_DIR = os.path.dirname(__file__)
 
 
 class TestServices(TestCase):
-    fixtures = ['areas.json', 'categories.json', 'events.json']
+    fixtures = [
+        'areas.json', 'categories.json', 'events.json',
+        'landings.json', 'special_seats.json',
+    ]
 
     @classmethod
     def setUpTestData(cls):
@@ -80,4 +83,5 @@ class TestServices(TestCase):
             status_code, response_data = get_event(
                 slug=data['slug'],
             )
+            print(response_data)
             self.assertEqual(status_code, code, msg=fixture)

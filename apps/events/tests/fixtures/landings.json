@@ -6,8 +6,6 @@
       "event": 1,
       "section": null,
       "row": null,
-      "seat_type": "Ordinary",
-      "seats": [],
       "quantity": 30,
       "price": "5000.00"
     }
@@ -16,26 +14,22 @@
     "model": "events.landing",
     "pk": 2,
     "fields": {
-      "event": 1,
-      "section": null,
-      "row": null,
-      "seat_type": "VIP",
-      "seats": [],
+      "event": 3,
+      "section": "1",
+      "row": "2",
       "quantity": 10,
-      "price": "8000.00"
+      "price": "5000.00"
     }
   },
   {
     "model": "events.landing",
     "pk": 3,
     "fields": {
-      "event": 1,
-      "section": null,
-      "row": null,
-      "seat_type": "Discounted",
-      "seats": [],
+      "event": 3,
+      "section": "1",
+      "row": "1",
       "quantity": 10,
-      "price": "3000.00"
+      "price": "8000.00"
     }
   },
     {
@@ -43,10 +37,8 @@
     "pk": 4,
     "fields": {
       "event": 2,
-      "section": null,
-      "row": null,
-      "seat_type": "VIP",
-      "seats": [],
+      "section": "1",
+      "row": "1",
       "quantity": 30,
       "price": "7000.00"
     }
