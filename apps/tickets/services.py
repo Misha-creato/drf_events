@@ -19,7 +19,7 @@ def get_all_tickets(user: User) -> (int, list):
     '''
 
     Args:
-        user: пользователь
+        user: авторизованный пользователь
 
     Returns:
         Код статуса и список данных
@@ -66,6 +66,9 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
 
     Args:
         data: данные qr
+        {
+            "uuid": "d868d304-f37a-46f2-ad68-a03f7492f62c"
+        }
 
     Returns:
         Код статуса и словарь данных
@@ -86,7 +89,6 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
         return 400, {}
 
     validated_data = serializer.validated_data
-    print(validated_data)
     try:
         ticket = Ticket.objects.filter(
             pk=validated_data['uuid'],
