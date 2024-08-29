@@ -1,6 +1,37 @@
 from rest_framework import serializers
 
-from events.models import Event
+from events.models import (
+    Event,
+    SpecialSeat,
+    Landing,
+)
+
+
+class SpecialSeatSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SpecialSeat
+        fields = [
+            'seat',
+            'price',
+            'seat_type'
+        ]
+
+
+class LandingSerializer(serializers.ModelSerializer):
+    special_seats = SpecialSeatSerializer(
+        many=True,
+    )
+
+    class Meta:
+        model = Landing
+        fields = [
+            'section',
+            'row',
+            'quantity',
+            'price',
+            'special_seats',
+        ]
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -38,3 +69,13 @@ class EventSerializer(serializers.ModelSerializer):
             'available_tickets',
             'description',
         ]
+
+
+class EventLandingSerializer(EventSerializer):
+    landings = LandingSerializer(
+        many=True,
+    )
+
+    class Meta(EventSerializer.Meta):
+        fields = EventSerializer.Meta.fields + ['landings']
+
