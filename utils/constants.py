@@ -24,13 +24,12 @@ AGE_LIMITS = (
 )
 
 TICKET_STATUSES = (
-    ('Active', 'Активный'),
-    ('Used', 'Использованный'),
-    ('Expired', 'Просроченный'),
+    ('active', 'Активный'),
+    ('used', 'Использованный'),
+    ('expired', 'Просроченный'),
 )
 
 SEAT_TYPES = (
-    ('Ordinary', 'Обычное'),
-    ('VIP', 'ВИП'),
-    ('Discounted', 'Уцененное'),
+    ('vip', 'ВИП'),
+    ('discounted', 'Уцененное'),
 )
