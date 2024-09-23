@@ -2,7 +2,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tickets.services import get_all_tickets, check_ticket_qr
+from tickets.services import (
+    get_user_tickets,
+    check_ticket_qr,
+)
+
 from utils.response_patterns import generate_response
 
 
@@ -12,7 +16,7 @@ class TicketView(APIView):
 
     def get(self, request):
         user = request.user
-        status_code, response_data = get_all_tickets(
+        status_code, response_data = get_user_tickets(
             user=user,
         )
         status, data = generate_response(
