@@ -3,10 +3,12 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.db import models
 
-from events.models import Landing
+from events.models import Event
 
-from utils.constants import TICKET_STATUSES
-
+from utils.constants import (
+    TICKET_STATUSES,
+    NOTIFICATION_STATUSES,
+)
 
 User = get_user_model()
 
@@ -18,9 +20,9 @@ class Ticket(models.Model):
         default=uuid.uuid4,
         editable=False,
     )
-    landing = models.ForeignKey(
+    event = models.ForeignKey(
         verbose_name='Посадка',
-        to=Landing,
+        to=Event,
         on_delete=models.SET_NULL,
         related_name='tickets',
         null=True,
@@ -66,6 +68,11 @@ class Ticket(models.Model):
     bought_at = models.DateTimeField(
         verbose_name='Дата и время покупки',
         auto_now_add=True,
+    )
+    notification_status = models.CharField(
+        verbose_name='Статус оповещения',
+        choices=NOTIFICATION_STATUSES,
+        default=NOTIFICATION_STATUSES[0],
     )
 
     def save(self, *args, **kwargs):
