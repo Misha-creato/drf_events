@@ -4,7 +4,10 @@ import os
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from tickets.services import get_user_tickets, check_ticket_qr
+from tickets.services import (
+    get_user_tickets,
+    check_ticket_qr,
+)
 
 CUR_DIR = os.path.dirname(__file__)
 User = get_user_model()
