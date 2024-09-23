@@ -24,6 +24,7 @@ class TestServices(TestCase):
     fixtures = [
         'areas.json', 'categories.json', 'events.json',
         'landings.json', 'special_seats.json',
+        'users.json', 'tickets.json'
     ]
 
     @classmethod
