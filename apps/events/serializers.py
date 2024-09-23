@@ -6,6 +6,8 @@ from events.models import (
     Landing,
 )
 
+from tickets.models import Ticket
+
 
 class SpecialSeatSerializer(serializers.ModelSerializer):
 
@@ -15,6 +17,17 @@ class SpecialSeatSerializer(serializers.ModelSerializer):
             'seat',
             'price',
             'seat_type'
+        ]
+
+
+class TicketSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Ticket
+        fields = [
+            'section',
+            'row',
+            'seat',
         ]
 
 
@@ -75,7 +88,13 @@ class EventLandingSerializer(EventSerializer):
     landings = LandingSerializer(
         many=True,
     )
+    tickets = TicketSerializer(
+        many=True,
+    )
 
     class Meta(EventSerializer.Meta):
-        fields = EventSerializer.Meta.fields + ['landings']
+        fields = EventSerializer.Meta.fields + [
+            'landings',
+            'tickets',
+        ]
 
