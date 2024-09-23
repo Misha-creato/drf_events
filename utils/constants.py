@@ -29,6 +29,15 @@ TICKET_STATUSES = (
     ('expired', 'Просроченный'),
 )
 
+
+NOTIFICATION_STATUSES = (
+    ('no notify', 'Не оповещен'),
+    ('3 days', 'За 3 дня'),
+    ('day in day', 'День в день'),
+    ('expired', 'Просроченный'),
+)
+
+
 SEAT_TYPES = (
     ('vip', 'ВИП'),
     ('discounted', 'Уцененное'),
