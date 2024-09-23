@@ -8,6 +8,7 @@ from events.serializers import (
     EventLandingSerializer,
 )
 
+from utils import redis_cache
 from utils.logger import get_logger
 
 
@@ -52,7 +53,7 @@ def get_all_events(request: Any, filter_backends: list, view: Any) -> (int, list
     try:
         events = Event.objects.filter(
             canceled=False,
-            start_at__gte=timezone.now(),
+            end_at__gte=timezone.now(),
         ).select_related('area', 'category')
     except Exception as exc:
         logger.error(
@@ -106,7 +107,36 @@ def get_event(slug: str) -> (int, dict):
             "min_price": 4000,
             "quantity": 50,
             "available_tickets": 45,
-            "description": "Description"
+            "description": "Description",
+            "landings": [
+            {
+                "section": null,
+                "row": null,
+                "quantity": 25,
+                "price": "4000.00",
+                "special_seats": [
+                {
+                    "seat": "12",
+                    "price": "8000.00",
+                    "seat_type": "vip"
+                }
+                ]
+            }
+            ],
+            "tickets": [
+            {
+                "section": null,
+                "row": null,
+                "seat": "8"
+            }
+            ],
+            "temporary_booking": [
+            {
+                "section": null,
+                "row": null,
+                "seat": "18"
+            }
+            ]
         }
     '''
 
@@ -117,7 +147,7 @@ def get_event(slug: str) -> (int, dict):
     try:
         event = Event.objects.filter(
             canceled=False,
-            start_at__gte=timezone.now(),
+            end_at__gte=timezone.now(),
             slug=slug,
         ).first()
     except Exception as exc:
@@ -132,9 +162,31 @@ def get_event(slug: str) -> (int, dict):
         )
         return 404, {}
 
+    key_pattern = f'*_event{slug}_*'
+    status, matching_keys = redis_cache.get_matching_keys(
+        key_pattern=key_pattern,
+    )
+
+    if status != 200:
+        logger.error(
+            msg=f'Не удалось получить временные брони мероприятия по слагу {slug}',
+        )
+        return status, {}
+
+    temporary_booking = []
+    for key in matching_keys:
+        status, data = redis_cache.get(
+            key=key,
+        )
+        if status != 200:
+            return status, {}
+
+        temporary_booking.append(data)
+
     response_data = EventLandingSerializer(
         instance=event,
     ).data
+    response_data['temporary_booking'] = temporary_booking
     logger.info(
         msg=f'Успешно найдено мероприятие по слагу {slug}',
     )
