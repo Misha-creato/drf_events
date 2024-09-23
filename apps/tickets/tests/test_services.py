@@ -4,7 +4,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from tickets.services import get_all_tickets, check_ticket_qr
+from tickets.services import get_user_tickets, check_ticket_qr
 
 CUR_DIR = os.path.dirname(__file__)
 User = get_user_model()
@@ -21,7 +21,7 @@ class TestServices(TestCase):
         cls.path = f'{CUR_DIR}/fixtures/services'
 
     def test_get_all_tickets(self):
-        status_code, response_data = get_all_tickets(
+        status_code, response_data = get_user_tickets(
             user=User.objects.get(pk=1),
         )
         print(response_data)

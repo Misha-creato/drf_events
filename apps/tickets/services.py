@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 User = get_user_model()
 
 
-def get_all_tickets(user: User) -> (int, list):
+def get_user_tickets(user: User) -> (int, list):
     '''
 
     Args:
@@ -30,7 +30,7 @@ def get_all_tickets(user: User) -> (int, list):
                 "section": "1",
                 "row": "2",
                 "seat": "8",
-                "status": "Active",
+                "status": "аctive",
                 "bought_at": "2024-08-08T12:15:32+05:00"
             }
         ]
@@ -105,7 +105,7 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
         )
         return 410, {}
 
-    if ticket.status != 'Active':
+    if ticket.status != 'active':
         logger.error(
             msg=f'Билет с данными {data} уже недействителен',
         )
@@ -116,7 +116,7 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
         ticket.save()
     except Exception as exc:
         logger.error(
-            msg=f'Возникла ошибка при проверки данных для qr билета {data}: {exc}',
+            msg=f'Возникла ошибка при проверке данных для qr билета {data}: {exc}',
         )
         return 500, {}
 
