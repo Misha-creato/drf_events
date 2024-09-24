@@ -32,8 +32,12 @@ DEBUG = os.environ.get(
 )
 DEBUG = DEBUG == 'True'
 
+HOST = os.environ.get(
+    'HOST', '127.0.0.1',
+)
+
 ALLOWED_HOSTS = os.environ.get(
-    'ALLOWED_HOSTS', 'localhost, 127.0.0.1'
+    'ALLOWED_HOSTS', f'localhost, {HOST}'
 ).replace(' ', '').replace('|', '').split(',')
 
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -252,3 +256,9 @@ FIXTURE_DIRS = (
     os.path.join(BASE_DIR, 'apps', 'events', 'tests', 'fixtures'),
     os.path.join(BASE_DIR, 'apps', 'tickets', 'tests', 'fixtures'),
 )
+
+# Celery
+
+CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
+CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
+CELERY_TIMEZONE = 'Asia/Almaty'
