@@ -21,7 +21,7 @@ class Ticket(models.Model):
         editable=False,
     )
     event = models.ForeignKey(
-        verbose_name='Посадка',
+        verbose_name='Мероприятие',
         to=Event,
         on_delete=models.SET_NULL,
         related_name='tickets',
@@ -76,11 +76,8 @@ class Ticket(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        if not self.price:
-            self.section = self.landing.section
-            self.row = self.landing.row
-            self.price = self.landing.price
-            self.event_name = self.landing.event.name
+        if not self.uuid:
+            self.event_name = self.event.name
         super().save(*args, **kwargs)
 
     class Meta:
