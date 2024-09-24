@@ -1,6 +1,5 @@
 from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
-from django.forms import model_to_dict
 
 from config.settings import (
     EMAIL_HOST_USER,
