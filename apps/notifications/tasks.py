@@ -1,8 +1,13 @@
-import datetime
+from celery import shared_task
 
-from django.utils import timezone
+from django.urls import reverse
 
-from events.models import Event
+from config.settings import (
+    SITE_PROTOCOL,
+    HOST,
+)
+
+from notifications.services import Email
 
 from tickets.models import Ticket
 
@@ -12,81 +17,35 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def get_events_day_in_day():
+@shared_task
+def notify_user(ticket_uuid: str, ticket_data: dict, email_type: str, notification_status: str):
+    user_email = ticket_data['user_email']
     logger.info(
-        msg=f'Получение списка мероприятий для оповещения пользователей'
+        msg=f'Отправка письма-оповещения пользователю {user_email}'
     )
 
-    try:
-        events = Event.objects.filter(
-            notification_status__in=['no notify', '3 days'],
-            start_at__date=timezone.now().date()
-        )
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при получении списка мероприятий '
-                f'для оповещения пользователей: {exc}',
-        )
-    else:
-        for event in events:
-            pass # TODO
+    path = reverse('event', args=(ticket_data['event_slug'],))
+    url = f'{SITE_PROTOCOL}://{HOST}/{path}'
+    mail_data = {
+        'datetime': ticket_data['datetime'],
+        'event_name': ticket_data['event_name'],
+        'url': url,
+    }
 
-
-def get_events_by_3_days():
-    logger.info(
-        msg=f'Получение списка мероприятий для оповещения пользователей'
+    email = Email(
+        email_type=email_type,
+        mail_data=mail_data,
+        recipient=user_email,
     )
-
-    try:
-        events = Event.objects.filter(
-            notification_status='no notify',
-            start_at__date=timezone.now().date() + datetime.timedelta(days=3),
-        )
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при получении списка мероприятий '
-                f'для оповещения пользователей: {exc}',
-        )
-    else:
-        for event in events:
-            pass # TODO
-
-
-def get_expired_events():
-    logger.info(
-        msg=f'Получение списка мероприятий для оповещения пользователей'
-    )
-
-    try:
-        events = Event.objects.filter(
-            notification_status__in=['no notify', '3 days', 'day in day'],
-            end_at__lte=timezone.now()
-        )
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при получении списка мероприятий '
-                f'для оповещения пользователей: {exc}',
-        )
-    else:
-        for event in events:
-            pass # TODO
-
-
-def get_expired_tickets():
-    logger.info(
-        msg=f'Получение списка билетов для обновления статуса и оповещения пользователей'
-    )
-
-    try:
-        tickets = Ticket.objects.filter(
-            status='active',
-            event__end_at__lte=timezone.now()
-        )
-    except Exception as exc:
-        logger.error(
-            msg=f'Не удалось получить список билетов для обновления статуса и'
-                f'оповещения пользователей: {exc}',
-        )
-    else:
-        for ticket in tickets:
-            pass #todo
+    status = email.send()
+    if status == 200:
+        try:
+            ticket = Ticket.objects.filter(
+                uuid=ticket_uuid,
+            )
+            ticket.notification_status = notification_status
+            ticket.save()
+        except Exception as exc:
+            logger.error(
+                f'Не удалось обновить статус оповещения билета {ticket_uuid}: {exc}',
+            )
