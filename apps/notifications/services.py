@@ -13,17 +13,17 @@ from utils import redis_cache
 from utils.logger import get_logger
 
 
-User = get_user_model
+User = get_user_model()
 logger = get_logger(__name__)
 
 
 class Email:
     email_host_user = EMAIL_HOST_USER
 
-    def __init__(self, email_type: str, mail_data: dict, recipient: User):
+    def __init__(self, email_type: str, mail_data: dict, recipient: list | User):
         self.email_type = email_type
         self.mail_data = mail_data
-        self.recipient = recipient
+        self.recipient = recipient if isinstance(recipient, list) else [recipient]
 
     def _get_email_template(self):
         '''
@@ -157,7 +157,7 @@ class Email:
                 subject=subject,
                 message=email_text['message'],
                 from_email=self.email_host_user,
-                recipient_list=[self.recipient],
+                recipient_list=self.recipient,
             )
         except Exception as exc:
             logger.error(
