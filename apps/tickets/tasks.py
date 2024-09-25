@@ -9,8 +9,6 @@ from config.settings import (
 
 from notifications.services import Email
 
-from tickets.models import Ticket
-
 from utils.logger import get_logger
 
 
@@ -18,34 +16,45 @@ logger = get_logger(__name__)
 
 
 @shared_task
-def notify_user(ticket_uuid: str, ticket_data: dict, email_type: str, notification_status: str):
-    user_email = ticket_data['user_email']
+def notify_users(event_data: dict, recipient_list: list, email_type: str) -> int:
+    '''
+    Асинхронная отправка писем-оповещений по мероприятию списку пользователей
+
+    Args:
+        event_data: данные мероприятия для формирования текста письма
+            {
+            "name": "Test event name",
+            "datetime": datetime.datetime(2024, 9, 25, 13, 0,
+            tzinfo=datetime.timezone.utc),
+            "slug": "test-event-name"
+            }
+        recipient_list: список получателей письма
+            ["test1@cc.com", "test2@cc.com"]
+        email_type: тип письма
+            "notify_day_in_day"
+
+    Returns:
+        Код статуса
+    '''
+
+    event_name = event_data['name']
     logger.info(
-        msg=f'Отправка письма-оповещения пользователю {user_email}'
+        msg=f'Отправка писeм-оповещений {email_type} по мероприятию '
+            f' {event_name} списку пользователей {recipient_list}',
     )
 
-    path = reverse('event', args=(ticket_data['event_slug'],))
+    path = reverse('event', args=(event_data['slug'],))
     url = f'{SITE_PROTOCOL}://{HOST}/{path}'
     mail_data = {
-        'datetime': ticket_data['datetime'],
-        'event_name': ticket_data['event_name'],
+        'datetime': event_data['datetime'],
+        'event_name': event_name,
         'url': url,
     }
 
     email = Email(
         email_type=email_type,
         mail_data=mail_data,
-        recipient=user_email,
+        recipient=recipient_list,
     )
     status = email.send()
-    if status == 200:
-        try:
-            ticket = Ticket.objects.filter(
-                uuid=ticket_uuid,
-            )
-            ticket.notification_status = notification_status
-            ticket.save()
-        except Exception as exc:
-            logger.error(
-                f'Не удалось обновить статус оповещения билета {ticket_uuid}: {exc}',
-            )
+    return status
