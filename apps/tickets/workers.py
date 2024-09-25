@@ -11,13 +11,14 @@ from utils.constants import (
     TICKET_STATUSES,
     NOTIFY_DAY_IN_DAY,
     NOTIFY_3_DAYS,
-    NOTIFY_EXPIRED)
+    NOTIFY_EXPIRED
+)
 
 
 logger = get_logger(__name__)
 
 
-def check_notification(notification_status: str):
+def check_notification(notification_status: str) -> None:
     logger.info(
         msg=f'Получение билетов для оповещения пользователя '
             f'{notification_status}',
@@ -40,6 +41,8 @@ def check_notification(notification_status: str):
                                                   '3_days', 'day_in_day']
             filters['status'] = 'expired'
             email_type = NOTIFY_EXPIRED
+        case _:
+            return
 
     try:
         tickets = Ticket.objects.filter(**filters)

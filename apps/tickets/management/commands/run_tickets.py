@@ -1,7 +1,7 @@
 import time
 from django.core.management.base import BaseCommand
 
-from notifications.workers import check_notification
+from tickets.workers import check_notification
 from utils.logger import get_logger
 
 
