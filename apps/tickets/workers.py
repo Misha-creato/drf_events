@@ -19,7 +19,7 @@ from utils.constants import (
 logger = get_logger(__name__)
 
 
-def check_notification(notification_status: str) -> None:
+def notification(notification_status: str) -> None:
     '''
     Получение билетов по мероприятиям и оповещение пользователей
 
@@ -35,29 +35,28 @@ def check_notification(notification_status: str) -> None:
             f'{notification_status}',
     )
 
-    event_filters = {}
-    ticket_filters = {}
+    filters = {}
     email_type = ''
     match notification_status:
         case 'day_in_day':
-            event_filters['start_at__date'] = timezone.now().date()
-            ticket_filters['notification_status__in'] = ['no_notify', '3_days']
+            filters['notification_status__in'] = ['no_notify', '3_days']
+            filters['event__start_at__date'] = timezone.now().date()
             email_type = NOTIFY_DAY_IN_DAY
         case '3_days':
-            event_filters['start_at__date'] = (timezone.now().date() +
-                                               datetime.timedelta(days=3))
-            ticket_filters['notification_status'] = 'no_notify'
+            filters['notification_status'] = 'no_notify'
+            filters['event__start_at__date'] = (timezone.now().date() +
+                                                datetime.timedelta(days=3))
             email_type = NOTIFY_3_DAYS
         case 'expired':
-            ticket_filters['notification_status__in'] = ['no_notify',
-                                                         '3_days', 'day_in_day']
-            ticket_filters['status'] = 'expired'
+            filters['notification_status__in'] = ['no_notify',
+                                                  '3_days', 'day_in_day']
+            filters['status'] = 'expired'
             email_type = NOTIFY_EXPIRED
         case _:
             return
 
     try:
-        events = Event.objects.filter(**event_filters)
+        tickets = Ticket.objects.filter(**filters).select_related('event', 'user')
     except Exception as exc:
         logger.error(
             msg=f'Возникла ошибка при получении билетов для оповещения '
@@ -65,21 +64,23 @@ def check_notification(notification_status: str) -> None:
         )
         return
 
-    for event in events:
-        tickets = event.tickets.filter(**ticket_filters)
-        recipient_list = list(tickets.values_list('user__email', flat=True))
-        event_name = event.name
-        event_data = {
-            'name': event_name,
-            'datetime': event.start_at,
-            'slug': event.slug,
-        }
-        if not recipient_list:
-            return
+    aggregated_events = {}
+    for ticket in tickets:
+        if not aggregated_events.get(ticket.event.id):
+            aggregated_events[ticket.event.id] = {}
+            event_data = {
+                'name': ticket.event_name,
+                'datetime': ticket.event.start_at,
+                'slug': ticket.event.slug,
+            }
+            aggregated_events[ticket.event.id]['event_data'] = event_data
+            aggregated_events[ticket.event.id]['recipients'] = []
+        aggregated_events[ticket.event.id]['recipients'].append(ticket.user.email)
 
+    for event, value in aggregated_events.items():
         status = notify_users.delay(
-            event_data=event_data,
-            recipient_list=recipient_list,
+            event_data=value['event_data'],
+            recipient_list=value['recipients'],
             email_type=email_type,
         )
         if status.get() != 200:
@@ -87,21 +88,20 @@ def check_notification(notification_status: str) -> None:
 
         logger.info(
             msg=f'Отправлено {len(tickets)} писем-оповещений {email_type} '
-                f'по мероприятию {event_name} пользователям'
+                f'пользователям'
         )
         try:
             tickets.update(notification_status=notification_status)
         except Exception as exc:
             logger.error(
                 msg=f'Возникла ошибка при обновлении статуса оповещения '
-                    f'{notification_status} билетов по мероприятию '
-                    f'{event_name}: {exc}',
+                    f'{notification_status} билетов: {exc}',
             )
             return
 
         logger.info(
             msg=f'Успешно обновлены статусы оповещения {notification_status}'
-                f'билетов по мероприятию {event_name}',
+                f'билетов',
         )
 
 
