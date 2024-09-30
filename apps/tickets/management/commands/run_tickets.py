@@ -3,7 +3,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from tickets.workers import (
-    notification,
+    user_event_notification,
     update_ticket_status,
 )
 
@@ -19,8 +19,8 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
 
         while True:
-            notification(notification_status='day_in_day')
-            notification(notification_status='3_days')
-            notification(notification_status='expired')
+            user_event_notification(notification_status='day_in_day')
+            user_event_notification(notification_status='3_days')
+            user_event_notification(notification_status='expired')
             update_ticket_status()
             time.sleep(60)
