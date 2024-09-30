@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from tickets.services import (
     get_user_tickets,
     check_ticket_qr,
+    buy,
 )
 
 from utils.response_patterns import generate_response
@@ -39,6 +40,27 @@ class TicketQrView(APIView):
         status, data = generate_response(
             status_code=status_code,
             data=response_data,
+        )
+        return Response(
+            status=status,
+            data=data,
+        )
+
+
+class TicketBuyView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        data = request.data
+        status_code, response_data = buy(
+            user=user,
+            data=data,
+        )
+        status, data = generate_response(
+            status_code=status_code,
+            data=data,
         )
         return Response(
             status=status,
