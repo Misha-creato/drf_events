@@ -3,6 +3,7 @@ from django.urls import path
 from tickets.api import (
     TicketView,
     TicketQrView,
+    TicketBuyView,
 )
 
 
@@ -17,4 +18,9 @@ urlpatterns = [
         TicketQrView.as_view(),
         name='ticket_qr_check',
     ),
+    path(
+        'buy/',
+        TicketBuyView.as_view(),
+        name='ticket_buy',
+    )
 ]
