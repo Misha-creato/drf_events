@@ -1,5 +1,21 @@
+from datetime import (
+    datetime,
+    timedelta
+)
+
+import requests
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.http import QueryDict
+
+from config.settings import (
+    PAYMENT_HOST,
+    PAYMENT_AUTHORIZATION_TOKEN,
+    PAYMENT_SITE_ID,
+)
+
+from events.models import Event
 
 from tickets.serializer import (
     TicketSerializer,
@@ -7,6 +23,7 @@ from tickets.serializer import (
 )
 from tickets.models import Ticket
 
+from utils import redis_cache
 from utils.constants import TICKET_STATUSES
 from utils.logger import get_logger
 
@@ -124,3 +141,159 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
         msg=f'Успешно проверены qr данные билета {data}',
     )
     return 200, {}
+
+
+def buy(user: User, data: QueryDict) -> (int, dict):
+    '''
+    Покупка билета пользователем
+
+    Args:
+        user: пользователь
+        data: данные билета
+        {
+            "event_id": 1,
+            "seat_data":
+            {
+                "section": "1",
+                "row": "1",
+                "seat": "1"
+            }
+            "price": 1000.00
+        }
+
+    Returns:
+
+    '''
+
+    logger.info(
+        msg=f'Покупка билета {data} пользователем {user}',
+    )
+
+    event_id = data['event_id']
+    try:
+        event = Event.objects.filter(
+            id=event_id,
+        ).first()
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при получении мероприятия по id {event_id}: {exc}',
+        )
+        return 500, {}
+
+    if event is None:
+        logger.info(
+            msg=f'Мероприятие по id {event_id} не найдено',
+        )
+        return 400, {}
+
+    key_pattern = f'*_event{event_id}_*'
+    status, matching_keys = redis_cache.get_matching_keys(
+        key_pattern=key_pattern,
+    )
+
+    if status != 200:
+        logger.error(
+            msg=f'Не удалось получить временные брони мероприятия по id {event_id}',
+        )
+        return status, {}
+
+    seat_data = data['seat_data']
+    for key in matching_keys:
+        status, key_data = redis_cache.get(
+            key=key,
+        )
+        if status != 200:
+            return status, {}
+
+        if seat_data == key_data['seat_data']:
+            logger.error(
+                msg=f'Некорретные данные для покупки билета',
+            )
+            return 400, {}
+
+    try:
+        tickets = list(event.tickets.all().values('section', 'row', 'seat'))
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при получении билетов мероприятия по id '
+                f'{event_id}: {exc}',
+        )
+        return 500, {}
+
+    if seat_data in tickets:
+        logger.error(
+            msg=f'Некорретные данные для покупки билета. Билет уже куплен',
+        )
+        return 400, {}
+
+    logger.info(
+        msg=f'Создание счета для оплаты билета {seat_data} '
+            f'на мероприятие {event_id} пользователю {user}',
+    )
+    price = data['price']
+    bill_data = {
+        "amount": {
+            "currency": "KZT",
+            "value": str(price)
+        },
+        "expirationDateTime": (datetime.now() + timedelta(minutes=10)).isoformat(),
+        "comment": "Оплата билетов на мероприятие",
+        # "successUrl": "https://test.com/#success", #TODO
+        # "failedUrl": "https://test.com/#failure", #TODO
+        "customer": {
+            "email": user.email,
+        }
+    }
+    bill_id = str(uuid.uuid4())
+    headers = {
+        "Authorization": f"Bearer {PAYMENT_AUTHORIZATION_TOKEN}",
+    }
+    url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}/bills/{bill_id}/'
+    response = requests.put(
+        url=url,
+        headers=headers,
+        json=bill_data,
+    )
+    if response.status_code != 200:
+        logger.error(
+            msg=f'Возникла ошибка при создании счета для оплаты билета {seat_data}'
+                f'на мероприятие {event_id} пользователю {user}: {response.json()}',
+        )
+        return 500, {}
+
+    key = f'event{event_id}_{str(uuid.uuid4())}'
+    ticket_data = {
+        'seat_data': seat_data,
+        'user': user.id,
+        'price': price,
+        'event': event_id,
+        'bill_id': bill_id
+    }
+    status = redis_cache.set_key(
+        key=key,
+        data=ticket_data,
+        time=600
+    )
+    if status != 200:
+        logger.error(
+            msg=f'Не удалось создать временную бронь билета {seat_data} на '
+                f'мероприятие {event_id}',
+        )
+        return 500, {}
+
+    logger.info(
+        msg=f'Временно забронированн билет {seat_data} на мероприятие {event_id}.'
+            f'Создан счет для оплаты билета пользователю {user}',
+    )
+    pay_url = response.json()['payUrl']
+    response_data = {
+        'pay_url': pay_url,
+    }
+    return 200, response_data
+
+
+def confirm_buying() -> (int, dict):
+    logger.info(
+        msg=f'Подтверждение покупки'
+    )
+    pass
