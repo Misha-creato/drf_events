@@ -162,7 +162,7 @@ def get_event(slug: str) -> (int, dict):
         )
         return 404, {}
 
-    key_pattern = f'*_event{slug}_*'
+    key_pattern = f'*_event{event.id}_*'
     status, matching_keys = redis_cache.get_matching_keys(
         key_pattern=key_pattern,
     )
