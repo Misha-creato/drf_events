@@ -9,3 +9,4 @@ redis==5.0.7
 pytz==2024.1
 pillow==10.4.0
 celery==5.4.0
+requests==2.32.3
