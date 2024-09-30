@@ -19,7 +19,7 @@ from utils.constants import (
 logger = get_logger(__name__)
 
 
-def notification(notification_status: str) -> None:
+def user_event_notification(notification_status: str) -> None:
     '''
     Получение билетов по мероприятиям и оповещение пользователей
 
@@ -36,7 +36,6 @@ def notification(notification_status: str) -> None:
     )
 
     filters = {}
-    email_type = ''
     match notification_status:
         case 'day_in_day':
             filters['notification_status__in'] = ['no_notify', '3_days']
