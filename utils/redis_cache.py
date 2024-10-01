@@ -103,3 +103,23 @@ def get_matching_keys(key_pattern: str) -> (int, list):
             f'по шаблону {key_pattern}',
     )
     return 200, matching_keys
+
+
+def delete(key: str) -> int:
+    logger.info(
+        msg=f'Удаление ключа из redis {key}',
+    )
+
+    try:
+        redis_client.delete(key)
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при удалении ключа {key} из redis:'
+                f'{exc}',
+        )
+        return 500
+
+    logger.info(
+        msg=f'Успешно удален ключ {key} из redis',
+    )
+    return 200
