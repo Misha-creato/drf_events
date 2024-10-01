@@ -29,6 +29,7 @@ AGE_LIMITS = (
 )
 
 TICKET_STATUSES = (
+    ('waiting_payment', 'Ожидание оплаты'),
     ('active', 'Активный'),
     ('used', 'Использованный'),
     ('expired', 'Просроченный'),
