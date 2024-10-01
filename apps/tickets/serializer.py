@@ -20,3 +20,18 @@ class TicketSerializer(serializers.ModelSerializer):
 
 class TicketQRSerializer(serializers.Serializer):
     uuid = serializers.CharField()
+
+
+class SeatDataSerializer(serializers.Serializer):
+    section = serializers.CharField()
+    row = serializers.CharField()
+    seat = serializers.CharField
+
+
+class TicketBuySerializer(serializers.Serializer):
+    event_id = serializers.IntegerField()
+    seat_data = SeatDataSerializer()
+    price = serializers.DecimalField(
+        max_digits=7,
+        decimal_places=2
+    )
