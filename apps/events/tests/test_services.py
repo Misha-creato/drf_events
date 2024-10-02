@@ -4,6 +4,7 @@ from datetime import datetime
 
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
@@ -17,6 +18,7 @@ from events.services import (
 )
 
 
+User = get_user_model()
 CUR_DIR = os.path.dirname(__file__)
 
 
@@ -68,6 +70,7 @@ class TestServices(TestCase):
     def test_get_event(self, mock_timezone):
         dt = datetime(2024, 8, 1, tzinfo=timezone.utc)
         mock_timezone.return_value = dt
+        user = User.objects.first()
 
         path = f'{self.path}/get_event'
         fixtures = (
@@ -82,6 +85,7 @@ class TestServices(TestCase):
                 data = json.load(file)
 
             status_code, response_data = get_event(
+                user=user,
                 slug=data['slug'],
             )
             print(response_data)
