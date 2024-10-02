@@ -8,6 +8,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.http import QueryDict
+from django.utils import timezone
 
 from config.settings import (
     PAYMENT_HOST,
@@ -31,6 +32,51 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 User = get_user_model()
+
+
+class Payment:
+    bill_success_statuses = [
+        'CREATED',
+        'PAID',
+    ]
+    payment_success_statuses = [
+        'WAITING',
+        'COMPLETED',
+    ]
+    url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}'
+    headers = {
+        "Authorization": f"Bearer {PAYMENT_AUTHORIZATION_TOKEN}",
+    }
+
+    def make_request(self, method: str, path: str, json_data: dict = None) -> (int, dict):
+        logger.info(
+            msg=f'Отправка {method} запроса в платежную систему по пути {path} '
+                f'с данными {json_data}',
+        )
+        url = self.url + path
+        if json_data is None:
+            json_data = {}
+        try:
+            response = getattr(requests, method)(
+                url=url,
+                headers=self.headers,
+                json=json_data,
+            )
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при отправке {method} запроса в платежную '
+                    f'систему по пути {path} с данными {json_data}: {exc}',
+            )
+            return 500, {}
+
+        logger.info(
+            msg=f'Успешно отпрвлен {method} запрос в платежную систему по пути '
+                f'{path} с данными {json_data}',
+        )
+        return 200, response
+
+
+payment = Payment()
 
 
 def get_user_tickets(user: User) -> (int, list):
@@ -180,10 +226,12 @@ def buy(user: User, data: QueryDict) -> (int, dict):
         )
         return 400, {}
 
+    data = serializer.validated_data
     event_id = data['event_id']
     try:
         event = Event.objects.filter(
             id=event_id,
+            canceled=False,
         ).first()
     except Exception as exc:
         logger.error(
@@ -216,7 +264,7 @@ def buy(user: User, data: QueryDict) -> (int, dict):
         if status != 200:
             return status, {}
 
-        if seat_data == key_data['seat_data']:
+        if seat_data == key_data['seat_data'] and user.id != key_data['user']:
             logger.error(
                 msg=f'Некорретные данные для покупки билета {data} пользователем'
                     f'{user}',
@@ -225,6 +273,7 @@ def buy(user: User, data: QueryDict) -> (int, dict):
 
     try:
         tickets = list(event.tickets.all().values('section', 'row', 'seat'))
+        print(tickets)
     except Exception as exc:
         logger.error(
             msg=f'Возникла ошибка при получении билетов мероприятия по id '
@@ -243,34 +292,33 @@ def buy(user: User, data: QueryDict) -> (int, dict):
         msg=f'Создание счета для оплаты билета {seat_data} '
             f'на мероприятие {event_id} пользователю {user}',
     )
-    price = data['price']
+    price = str(data['price'])
     bill_data = {
         "amount": {
             "currency": "KZT",
-            "value": str(price)
+            "value": price
         },
-        "expirationDateTime": (datetime.now() + timedelta(minutes=10)).isoformat(),
-        "comment": "Оплата билетов на мероприятие",
-        # "successUrl": "https://test.com/#success", #TODO
-        # "failedUrl": "https://test.com/#failure", #TODO
+        "expirationDateTime": (timezone.now() + timedelta(minutes=10)).
+        isoformat(timespec='seconds'),
+        "comment": f"Оплата билета на мероприятие {event.name}",
+        # "successUrl": "https://test.com/", #TODO
+        # "failedUrl": "https://test.com", #TODO
         "customer": {
             "email": user.email,
         }
     }
     bill_id = str(uuid.uuid4())
-    headers = {
-        "Authorization": f"Bearer {PAYMENT_AUTHORIZATION_TOKEN}",
-    }
-    url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}/bills/{bill_id}/'
-    response = requests.put(
-        url=url,
-        headers=headers,
-        json=bill_data,
+    path = f'/bills/{bill_id}/'
+    status, response = payment.make_request(
+        method='put',
+        path=path,
+        json_data=bill_data,
     )
-    if response.status_code != 200:
+    response_data = response.json()
+    if status != 200 or response.status_code != 200:
         logger.error(
-            msg=f'Возникла ошибка при создании счета для оплаты билета {seat_data}'
-                f'на мероприятие {event_id} пользователю {user}: {response.json()}',
+            msg=f'Возникла ошибка при создании счета для оплаты билета {seat_data} '
+                f'на мероприятие {event_id} пользователю {user}: {response_data}',
         )
         return 500, {}
 
@@ -294,10 +342,10 @@ def buy(user: User, data: QueryDict) -> (int, dict):
         return 500, {}
 
     logger.info(
-        msg=f'Временно забронированн билет {seat_data} на мероприятие {event_id}.'
+        msg=f'Временно забронированн билет {seat_data} на мероприятие {event_id}. '
             f'Создан счет для оплаты билета пользователю {user}',
     )
-    pay_url = response.json()['payUrl']
+    pay_url = response_data['payUrl']
     response_data = {
         'pay_url': pay_url,
     }
@@ -319,34 +367,31 @@ def confirm_buying(bill_id: str) -> (int, dict):
         msg=f'Подтверждение покупки по счету {bill_id}'
     )
 
-    headers = {
-        "Authorization": f"Bearer {PAYMENT_AUTHORIZATION_TOKEN}",
-    }
-    url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}/bills/{bill_id}/details'
-    response = requests.get(
-        url=url,
-        headers=headers
+    path = f'/bills/{bill_id}/details/'
+    status, response = payment.make_request(
+        method='get',
+        path=path,
     )
-    if response.status_code != 200:
+    response_data = response.json()
+    if status != 200 or response.status_code != 200:
         logger.error(
             msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
-                f'{response.json()}',
+                f'{response_data}',
         )
         return 500, {}
 
-    bill_data = response.json()
-    bill_status = bill_data['status']['value']
-    if bill_status not in ['CREATED', 'PAID']:
+    bill_status = response_data['status']['value']
+    if bill_status not in payment.bill_success_statuses:
         logger.error(
             msg=f'Не удалось подтвердить покупку по счету {bill_id}',
         )
         return 500, {} #Todo
 
-    payment = bill_data['payments'][0]
-    payment_id = payment['paymentId']
-    payment_status = payment['status']['value']
+    payment_data = response_data['payments'][0]
+    payment_id = payment_data['paymentId']
+    payment_status = payment_data['status']['value']
 
-    if payment_status not in ['WAITING', 'COMPLETED']:
+    if payment_status not in payment.payment_success_statuses:
         logger.error(
             msg=f'Не удалось подтвердить покупку по счету {bill_id}',
         )
