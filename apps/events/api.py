@@ -88,7 +88,9 @@ class EventView(APIView):
         summary='Получение мероприятия по слагу',
     )
     def get(self, request, slug):
+        user = request.user
         status_code, response_data = get_event(
+            user=user,
             slug=slug,
         )
         status, data = generate_response(
