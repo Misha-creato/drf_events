@@ -1,5 +1,7 @@
 from typing import Any
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
 from events.models import Event
@@ -12,6 +14,7 @@ from utils import redis_cache
 from utils.logger import get_logger
 
 
+User = get_user_model()
 logger = get_logger(__name__)
 
 
@@ -84,7 +87,7 @@ def get_all_events(request: Any, filter_backends: list, view: Any) -> (int, list
     return 200, response_data
 
 
-def get_event(slug: str) -> (int, dict):
+def get_event(user: User | AnonymousUser, slug: str) -> (int, dict):
     '''
     Получение мероприятия по слагу
 
@@ -132,10 +135,18 @@ def get_event(slug: str) -> (int, dict):
             ],
             "temporary_booking": [
             {
-                "section": null,
-                "row": null,
-                "seat": "18"
+                "event": 1,
+                "user": 1,
+                "seat_data":
+                {
+                    "section": null,
+                    "row": null,
+                    "seat": "18"
+                }
+                price: 1000.00
             }
+            ]
+            "user_temporary_booking": [
             ]
         }
     '''
@@ -162,7 +173,7 @@ def get_event(slug: str) -> (int, dict):
         )
         return 404, {}
 
-    key_pattern = f'*_event{event.id}_*'
+    key_pattern = f'*event{event.id}*'
     status, matching_keys = redis_cache.get_matching_keys(
         key_pattern=key_pattern,
     )
@@ -174,6 +185,7 @@ def get_event(slug: str) -> (int, dict):
         return status, {}
 
     temporary_booking = []
+    user_temporary_booking = []
     for key in matching_keys:
         status, data = redis_cache.get(
             key=key,
@@ -181,12 +193,16 @@ def get_event(slug: str) -> (int, dict):
         if status != 200:
             return status, {}
 
-        temporary_booking.append(data)
+        if data['user'] == user.id:
+            user_temporary_booking.append(data)
+        else:
+            temporary_booking.append(data)
 
     response_data = EventLandingSerializer(
         instance=event,
     ).data
     response_data['temporary_booking'] = temporary_booking
+    response_data['user_temporary_booking'] = user_temporary_booking
     logger.info(
         msg=f'Успешно найдено мероприятие по слагу {slug}',
     )
