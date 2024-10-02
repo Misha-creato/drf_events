@@ -62,7 +62,7 @@ class EventSerializer(serializers.ModelSerializer):
     def get_address(self, obj):
         return obj.area.address
 
-    def get_category(selfs, obj):
+    def get_category(self, obj):
         return obj.category.name
 
     class Meta:
