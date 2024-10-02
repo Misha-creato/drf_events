@@ -23,9 +23,13 @@ class TicketQRSerializer(serializers.Serializer):
 
 
 class SeatDataSerializer(serializers.Serializer):
-    section = serializers.CharField()
-    row = serializers.CharField()
-    seat = serializers.CharField
+    section = serializers.CharField(
+        allow_null=True,
+    )
+    row = serializers.CharField(
+        allow_null=True
+    )
+    seat = serializers.CharField()
 
 
 class TicketBuySerializer(serializers.Serializer):
