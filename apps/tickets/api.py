@@ -60,7 +60,7 @@ class TicketBuyView(APIView):
         )
         status, data = generate_response(
             status_code=status_code,
-            data=data,
+            data=response_data,
         )
         return Response(
             status=status,
