@@ -123,3 +123,68 @@ def delete(key: str) -> int:
         msg=f'Успешно удален ключ {key} из redis',
     )
     return 200
+
+
+def push_to_list(key: str, value: str | int) -> int:
+    logger.info(
+        msg=f'Добавление значения {value} в список redis по '
+            f'ключу {key}',
+    )
+
+    try:
+        redis_client.lpush(key, value)
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при добавлении значения {value} '
+                f'в список redis по ключу {key}',
+        )
+        return 500
+
+    logger.info(
+        msg=f'Успешно добавлено значение {value} в список redis по'
+            f'ключу {key}',
+    )
+    return 200
+
+
+def get_list(key: str) -> (int, list):
+    logger.info(
+        msg=f'Получение списка из redis по ключу {key}',
+    )
+
+    try:
+        redis_list = redis_client.lrange(name=key, start=0, end=-1)
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при получении списка из redis по'
+                f'ключу {key}',
+        )
+        return 500, []
+
+    value_list = [value.decode('utf-8') for value in redis_list]
+
+    logger.info(
+        msg=f'Успешно получен список из redis по ключу {key}',
+    )
+    return 200, value_list
+
+
+def remove_from_list(key: str, value: str) -> int:
+    logger.info(
+        msg=f'Удаление значения {value} из списка redis по ключу {key}',
+    )
+
+    try:
+        redis_client.lrem(name=key, count=0, value=value)
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при удалении значения {value} из '
+                f'списка redis по ключу {key}',
+        )
+        return 500
+
+    logger.info(
+        msg=f'Успешно удалено значение {value} из списка redis по '
+            f'ключу {key}',
+    )
+    return 200
