@@ -5,10 +5,13 @@ from rest_framework.views import APIView
 from tickets.services import (
     get_user_tickets,
     check_ticket_qr,
-    buy,
+    Payment,
 )
 
 from utils.response_patterns import generate_response
+
+
+payment = Payment()
 
 
 class TicketView(APIView):
@@ -54,7 +57,7 @@ class TicketBuyView(APIView):
     def post(self, request):
         user = request.user
         data = request.data
-        status_code, response_data = buy(
+        status_code, response_data = payment.buy(
             user=user,
             data=data,
         )
