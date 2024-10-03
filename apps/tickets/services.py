@@ -1,5 +1,4 @@
 from datetime import (
-    datetime,
     timedelta
 )
 
@@ -39,20 +38,50 @@ class Payment:
         'CREATED',
         'PAID',
     ]
+    payment_done_status = 'COMPLETED'
     payment_success_statuses = [
         'WAITING',
-        'COMPLETED',
+        payment_done_status,
     ]
     url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}'
     headers = {
         "Authorization": f"Bearer {PAYMENT_AUTHORIZATION_TOKEN}",
     }
+    allowed_methods = [
+        'get',
+        'post',
+        'put',
+    ]
 
     def make_request(self, method: str, path: str, json_data: dict = None) -> (int, dict):
+        '''
+        Отправка запроса с помощью библиотеки requests
+
+        Args:
+            method: метод запроса
+            "get"
+            path: путь запроса
+            "/path/"
+            json_data: данные запроса
+            {
+                "data": "example"
+            }
+
+        Returns:
+        Код статуса и словарь данных
+        '''
+
         logger.info(
             msg=f'Отправка {method} запроса в платежную систему по пути {path} '
                 f'с данными {json_data}',
         )
+        if method not in self.allowed_methods:
+            logger.error(
+                msg=f'Не удалось отправить {method} запрос в платежную систему '
+                    f'по пути {path} c данными {json_data}: неправильный метод',
+            )
+            return 400, {}
+
         url = self.url + path
         if json_data is None:
             json_data = {}
@@ -70,13 +99,322 @@ class Payment:
             return 500, {}
 
         logger.info(
-            msg=f'Успешно отпрвлен {method} запрос в платежную систему по пути '
+            msg=f'Отправлен {method} запрос в платежную систему по пути '
                 f'{path} с данными {json_data}',
         )
-        return 200, response
+        status = response.status_code
 
+        if status == 200:
+            data = response.json()
+        else:
+            data = response.content
+        return status, data
 
-payment = Payment()
+    def buy(self, user: User, data: QueryDict) -> (int, dict):
+        '''
+        Покупка билета пользователем
+
+        Args:
+            user: пользователь
+            data: данные билета
+            {
+                "event_id": 1,
+                "seat_data":
+                {
+                    "section": "1",
+                    "row": "1",
+                    "seat": "1"
+                }
+                "price": 1000.00
+            }
+
+        Returns:
+            Код статуса и словарь данных
+        '''
+
+        logger.info(
+            msg=f'Покупка билета {data} пользователем {user}',
+        )
+
+        serializer = TicketBuySerializer(
+            data=data
+        )
+        if not serializer.is_valid():
+            logger.error(
+                msg=f'Некорректные данные для покупки билета {data} пользователем {user}:'
+                    f'{serializer.errors}',
+            )
+            return 400, {}
+
+        data = serializer.validated_data
+        event_id = data['event_id']
+        try:
+            event = Event.objects.filter(
+                id=event_id,
+                canceled=False,
+            ).first()
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при получении мероприятия по id {event_id}: {exc}',
+            )
+            return 500, {}
+
+        if event is None:
+            logger.info(
+                msg=f'Мероприятие по id {event_id} не найдено',
+            )
+            return 404, {}
+
+        key_pattern = f'*event{event_id}*'
+        status, matching_keys = redis_cache.get_matching_keys(
+            key_pattern=key_pattern,
+        )
+
+        if status != 200:
+            logger.error(
+                msg=f'Не удалось получить временные брони мероприятия по id {event_id}',
+            )
+            return status, {}
+
+        seat_data = data['seat_data']
+        for key in matching_keys:
+            status, key_data = redis_cache.get(
+                key=key,
+            )
+            if status != 200:
+                return status, {}
+
+            if seat_data == key_data['seat_data'] and user.id != key_data['user']:
+                logger.error(
+                    msg=f'Некорретные данные для покупки билета {data} пользователем'
+                        f'{user}',
+                )
+                return 400, {}
+
+        try:
+            tickets = list(event.tickets.all().values('section', 'row', 'seat'))
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при получении билетов мероприятия по id '
+                    f'{event_id}: {exc}',
+            )
+            return 500, {}
+
+        if seat_data in tickets:
+            logger.error(
+                msg=f'Некорретные данные для покупки билета {data} пользователем '
+                    f'{user}. Билет уже куплен',
+            )
+            return 400, {}
+
+        logger.info(
+            msg=f'Создание счета для оплаты билета {data} пользователю {user}',
+        )
+        price = str(data['price'])
+        bill_data = {
+            "amount": {
+                "currency": "KZT",
+                "value": price
+            },
+            "expirationDateTime": (timezone.now() + timedelta(minutes=10)).
+            isoformat(timespec='seconds'),
+            "comment": f"Оплата билета на мероприятие {event.name}",
+            # "successUrl": "https://test.com/", #TODO
+            # "failedUrl": "https://test.com", #TODO
+            "customer": {
+                "email": user.email,
+            }
+        }
+        bill_id = str(uuid.uuid4())
+        path = f'/bills/{bill_id}/'
+        status, response_data = self.make_request(
+            method='put',
+            path=path,
+            json_data=bill_data,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Возникла ошибка при создании счета для оплаты билета {data} '
+                    f' пользователю {user}: {response_data}',
+            )
+            return 500, {}
+
+        key = f'event{event_id}_bill{bill_id}'
+        ticket_data = {
+            'seat_data': seat_data,
+            'user': user.id,
+            'price': price,
+            'event': event_id,
+        }
+        status = redis_cache.set_key(
+            key=key,
+            data=ticket_data,
+            time=600
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Не удалось создать временную бронь билета {data}',
+            )
+            return 500, {}
+
+        status = redis_cache.push_to_list(
+            key='bills_to_check',
+            value=bill_id,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Не удалось добавить {bill_id} в список для проверки',
+            )
+            return 500, {}
+
+        logger.info(
+            msg=f'Временно забронированн билет {data}. Cоздан счет для оплаты '
+                f'билета пользователю {user}',
+        )
+        pay_url = response_data['payUrl']
+        response_data = {
+            'pay_url': pay_url,
+        }
+        return 200, response_data
+
+    def confirm_buying(self, bill_id: str) -> (int, dict):
+        '''
+        Подтверждение покупки и создание билета по id счета
+
+        Args:
+            bill_id: id счета
+
+        Returns:
+            Код статуса и словарь данных
+        '''
+
+        logger.info(
+            msg=f'Подтверждение покупки по счету {bill_id}'
+        )
+
+        path = f'/bills/{bill_id}/details/'
+        status, response_data = self.make_request(
+            method='get',
+            path=path,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
+                    f'{response_data}',
+            )
+            return 500, {}
+
+        bill_status = response_data['status']['value']
+        if bill_status not in self.bill_success_statuses:
+            logger.error(
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+            )
+            return 500, {} #Todo
+
+        payment_data = response_data['payments'][0]
+        payment_id = payment_data['paymentId']
+        payment_status = payment_data['status']['value']
+
+        if payment_status not in self.payment_success_statuses:
+            logger.error(
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+            )
+            return 500, {}  # Todo
+
+        key_pattern = f'*bill{bill_id}*'
+        status, keys = redis_cache.get_matching_keys(
+            key_pattern=key_pattern,
+        )
+        if status != 200 or not keys:
+            logger.error(
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+            )
+            return status, {}
+
+        key = keys[0]
+        status, key_data = redis_cache.get(
+            key=key,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+            )
+            return status, {}
+
+        ticket_status = TICKET_STATUSES[1]
+        if payment_status == 'WAITING':
+            ticket_status = TICKET_STATUSES[0]
+
+        seat_data = key_data['seat_data']
+        try:
+            Ticket.objects.create(
+                event=key_data['event'],
+                user=key_data['user'],
+                section=seat_data['section'],
+                row=seat_data['row'],
+                seat=seat_data['seat'],
+                price=key_data['price'],
+                status=ticket_status,
+                payment_id=payment_id,
+            )
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}',
+            )
+            return 500, {}
+
+        redis_cache.delete(
+            key=key,
+        )
+
+        logger.info(
+            msg=f'Успешно подтверждена покупка по счету {bill_id} и создан билет',
+        )
+        return 200, {}
+
+    def check_payment(self, payment_id: str) -> (int, dict):
+        '''
+        Проверка статуса платежа по id
+
+        Args:
+            payment_id: id платежа
+
+        Returns:
+        Код статуса и словарь данных
+        '''
+
+        logger.info(
+            msg=f'Проверка статуса платежа {payment_id}',
+        )
+
+        path = f'/payments/{payment_id}/'
+        status, response_data = self.make_request(
+            method='get',
+            path=path,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
+            )
+            return 500, {}
+
+        payment_status = response_data['status']['value']
+        if payment_status not in self.payment_success_statuses:
+            logger.error(
+                msg=f'Платеж {payment_id} не прошел',
+            )
+            return 400, {} #TODO
+
+        if payment_status == self.payment_done_status:
+            logger.info(
+                msg=f'Платеж {payment_id} прошел успешно'
+            )
+            return 200, {} #TODO
+
+        logger.info(
+            msg=f'Платеж {payment_id} в обработке',
+        )
+        return 200, {} #TODO
 
 
 def get_user_tickets(user: User) -> (int, list):
@@ -189,262 +527,4 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
     )
     return 200, {}
 
-
-def buy(user: User, data: QueryDict) -> (int, dict):
-    '''
-    Покупка билета пользователем
-
-    Args:
-        user: пользователь
-        data: данные билета
-        {
-            "event_id": 1,
-            "seat_data":
-            {
-                "section": "1",
-                "row": "1",
-                "seat": "1"
-            }
-            "price": 1000.00
-        }
-
-    Returns:
-
-    '''
-
-    logger.info(
-        msg=f'Покупка билета {data} пользователем {user}',
-    )
-
-    serializer = TicketBuySerializer(
-        data=data
-    )
-    if not serializer.is_valid():
-        logger.error(
-            msg=f'Некорректные данные для покупки билета {data} пользователем {user}:'
-                f'{serializer.errors}',
-        )
-        return 400, {}
-
-    data = serializer.validated_data
-    event_id = data['event_id']
-    try:
-        event = Event.objects.filter(
-            id=event_id,
-            canceled=False,
-        ).first()
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при получении мероприятия по id {event_id}: {exc}',
-        )
-        return 500, {}
-
-    if event is None:
-        logger.info(
-            msg=f'Мероприятие по id {event_id} не найдено',
-        )
-        return 404, {}
-
-    key_pattern = f'*event{event_id}*'
-    status, matching_keys = redis_cache.get_matching_keys(
-        key_pattern=key_pattern,
-    )
-
-    if status != 200:
-        logger.error(
-            msg=f'Не удалось получить временные брони мероприятия по id {event_id}',
-        )
-        return status, {}
-
-    seat_data = data['seat_data']
-    for key in matching_keys:
-        status, key_data = redis_cache.get(
-            key=key,
-        )
-        if status != 200:
-            return status, {}
-
-        if seat_data == key_data['seat_data'] and user.id != key_data['user']:
-            logger.error(
-                msg=f'Некорретные данные для покупки билета {data} пользователем'
-                    f'{user}',
-            )
-            return 400, {}
-
-    try:
-        tickets = list(event.tickets.all().values('section', 'row', 'seat'))
-        print(tickets)
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при получении билетов мероприятия по id '
-                f'{event_id}: {exc}',
-        )
-        return 500, {}
-
-    if seat_data in tickets:
-        logger.error(
-            msg=f'Некорретные данные для покупки билета {data} пользователем '
-                f'{user}. Билет уже куплен',
-        )
-        return 400, {}
-
-    logger.info(
-        msg=f'Создание счета для оплаты билета {seat_data} '
-            f'на мероприятие {event_id} пользователю {user}',
-    )
-    price = str(data['price'])
-    bill_data = {
-        "amount": {
-            "currency": "KZT",
-            "value": price
-        },
-        "expirationDateTime": (timezone.now() + timedelta(minutes=10)).
-        isoformat(timespec='seconds'),
-        "comment": f"Оплата билета на мероприятие {event.name}",
-        # "successUrl": "https://test.com/", #TODO
-        # "failedUrl": "https://test.com", #TODO
-        "customer": {
-            "email": user.email,
-        }
-    }
-    bill_id = str(uuid.uuid4())
-    path = f'/bills/{bill_id}/'
-    status, response = payment.make_request(
-        method='put',
-        path=path,
-        json_data=bill_data,
-    )
-    response_data = response.json()
-    if status != 200 or response.status_code != 200:
-        logger.error(
-            msg=f'Возникла ошибка при создании счета для оплаты билета {seat_data} '
-                f'на мероприятие {event_id} пользователю {user}: {response_data}',
-        )
-        return 500, {}
-
-    key = f'event{event_id}_bill{bill_id}'
-    ticket_data = {
-        'seat_data': seat_data,
-        'user': user.id,
-        'price': price,
-        'event': event_id,
-    }
-    status = redis_cache.set_key(
-        key=key,
-        data=ticket_data,
-        time=600
-    )
-    if status != 200:
-        logger.error(
-            msg=f'Не удалось создать временную бронь билета {seat_data} на '
-                f'мероприятие {event_id}',
-        )
-        return 500, {}
-
-    logger.info(
-        msg=f'Временно забронированн билет {seat_data} на мероприятие {event_id}. '
-            f'Создан счет для оплаты билета пользователю {user}',
-    )
-    pay_url = response_data['payUrl']
-    response_data = {
-        'pay_url': pay_url,
-    }
-    return 200, response_data
-
-
-def confirm_buying(bill_id: str) -> (int, dict):
-    '''
-    Подтверждение покупки и создание билета по id счета
-
-    Args:
-        bill_id: id счета
-
-    Returns:
-        Код статуса и словарь данных
-    '''
-
-    logger.info(
-        msg=f'Подтверждение покупки по счету {bill_id}'
-    )
-
-    path = f'/bills/{bill_id}/details/'
-    status, response = payment.make_request(
-        method='get',
-        path=path,
-    )
-    response_data = response.json()
-    if status != 200 or response.status_code != 200:
-        logger.error(
-            msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
-                f'{response_data}',
-        )
-        return 500, {}
-
-    bill_status = response_data['status']['value']
-    if bill_status not in payment.bill_success_statuses:
-        logger.error(
-            msg=f'Не удалось подтвердить покупку по счету {bill_id}',
-        )
-        return 500, {} #Todo
-
-    payment_data = response_data['payments'][0]
-    payment_id = payment_data['paymentId']
-    payment_status = payment_data['status']['value']
-
-    if payment_status not in payment.payment_success_statuses:
-        logger.error(
-            msg=f'Не удалось подтвердить покупку по счету {bill_id}',
-        )
-        return 500, {}  # Todo
-
-    key_pattern = f'*bill{bill_id}*'
-    status, keys = redis_cache.get_matching_keys(
-        key_pattern=key_pattern,
-    )
-    if status != 200 or not keys:
-        logger.error(
-            msg=f'Не удалось подтвердить покупку по счету {bill_id}',
-        )
-        return status, {}
-
-    key = keys[0]
-    status, key_data = redis_cache.get(
-        key=key,
-    )
-    if status != 200:
-        logger.error(
-            msg=f'Не удалось подтвердить покупку по счету {bill_id}',
-        )
-        return status, {}
-
-    ticket_status = TICKET_STATUSES[1]
-    if payment_status == 'WAITING':
-        ticket_status = TICKET_STATUSES[0]
-
-    seat_data = key_data['seat_data']
-    try:
-        Ticket.objects.create(
-            event=key_data['event'],
-            user=key_data['user'],
-            section=seat_data['section'],
-            row=seat_data['row'],
-            seat=seat_data['seat'],
-            price=key_data['price'],
-            status=ticket_status,
-            payment_id=payment_id,
-        )
-    except Exception as exc:
-        logger.error(
-            msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}',
-        )
-        return 500, {}
-
-    redis_cache.delete(
-        key=key,
-    )
-
-    logger.info(
-        msg=f'Успешно подтверждена покупка по счету {bill_id} и создан билет',
-    )
-    return 200, {}
 
