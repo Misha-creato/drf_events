@@ -2,6 +2,7 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from events.models import Event
@@ -10,9 +11,11 @@ from events.serializers import (
     EventLandingSerializer,
 )
 
-from utils import redis_cache
-from utils.logger import get_logger
+from tickets.models import Ticket
 
+from utils import redis_cache
+from utils.constants import TICKET_STATUSES
+from utils.logger import get_logger
 
 User = get_user_model()
 logger = get_logger(__name__)
@@ -160,6 +163,12 @@ def get_event(user: User | AnonymousUser, slug: str) -> (int, dict):
             canceled=False,
             end_at__gte=timezone.now(),
             slug=slug,
+        ).prefetch_related(
+            Prefetch('tickets',
+                     queryset=Ticket.objects.exclude(
+                         status=TICKET_STATUSES['canceled'][0],
+                     )),
+            'landings',
         ).first()
     except Exception as exc:
         logger.error(
