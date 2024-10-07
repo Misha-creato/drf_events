@@ -184,27 +184,16 @@ def check_payment_status() -> None:
         )
     except Exception as exc:
         logger.error(
-            msg=f'Возникла ошибка при проверке статусов платежей в ожидании'
+            msg=f'Возникла ошибка при проверке статусов платежей в ожидании: {exc}',
         )
         return
 
     for ticket in tickets:
-        status, response = payment.check_payment(
+        status, ticket_status = payment.check_payment(
             payment_id=ticket.payment_id,
         )
-        if status == 200:
-            ticket.status = TICKET_STATUSES[1]
-            try:
-                ticket.save()
-            except Exception as exc:
-                logger.error(
-                    msg=f'Возникла ошибка при смене статуса оплаченного билета '
-                        f'{ticket}: {exc}',
-                )
-        elif status == 400:
-            try:
-                ticket.delete()
-            except Exception as exc:
-                logger.error(
-                    msg=f'Возникла ошибка при удалении неоплаченного билета {exc}'
-                )
+        ticket.status = ticket_status
+        ticket.check_count += 1
+        ticket.status_updated = timezone.now()
+
+    Ticket.objects.bulk_update(tickets, ['status'])
