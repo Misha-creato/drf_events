@@ -6,6 +6,7 @@ import requests
 import uuid
 
 from django.contrib.auth import get_user_model
+from django.db.models import Prefetch
 from django.http import QueryDict
 from django.utils import timezone
 
@@ -124,7 +125,7 @@ class Payment:
                     "section": "1",
                     "row": "1",
                     "seat": "1"
-                }
+                },
                 "price": 1000.00
             }
 
@@ -152,6 +153,11 @@ class Payment:
             event = Event.objects.filter(
                 id=event_id,
                 canceled=False,
+            ).prefetch_related(
+                Prefetch('tickets',
+                         queryset=Ticket.objects.exclude(
+                             status=TICKET_STATUSES['canceled'][0],
+                         ))
             ).first()
         except Exception as exc:
             logger.error(
@@ -219,8 +225,6 @@ class Payment:
             "expirationDateTime": (timezone.now() + timedelta(minutes=10)).
             isoformat(timespec='seconds'),
             "comment": f"Оплата билета на мероприятие {event.name}",
-            # "successUrl": "https://test.com/", #TODO
-            # "failedUrl": "https://test.com", #TODO
             "customer": {
                 "email": user.email,
             }
@@ -297,6 +301,13 @@ class Payment:
             method='get',
             path=path,
         )
+        if status == 500 and 'not found' in response_data['message'].lower():
+            logger.error(
+                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
+                    f'{response_data}',
+            )
+            return 404, {}
+
         if status != 200:
             logger.error(
                 msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
@@ -309,7 +320,7 @@ class Payment:
             logger.error(
                 msg=f'Не удалось подтвердить покупку по счету {bill_id}',
             )
-            return 500, {} #Todo
+            return 400, {} #Todo
 
         payment_data = response_data['payments'][0]
         payment_id = payment_data['paymentId']
@@ -319,7 +330,7 @@ class Payment:
             logger.error(
                 msg=f'Не удалось подтвердить покупку по счету {bill_id}',
             )
-            return 500, {}  # Todo
+            return 400, {}  # Todo
 
         key_pattern = f'*bill{bill_id}*'
         status, keys = redis_cache.get_matching_keys(
@@ -372,7 +383,7 @@ class Payment:
         )
         return 200, {}
 
-    def check_payment(self, payment_id: str) -> (int, dict):
+    def check_payment(self, payment_id: str) -> (int, tuple):
         '''
         Проверка статуса платежа по id
 
@@ -380,7 +391,7 @@ class Payment:
             payment_id: id платежа
 
         Returns:
-        Код статуса и словарь данных
+        Код статуса и новый статус билета
         '''
 
         logger.info(
@@ -392,29 +403,35 @@ class Payment:
             method='get',
             path=path,
         )
+        if status == 500 and 'not found' in response_data['message'].lower():
+            logger.error(
+                msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
+            )
+            return 404, TICKET_STATUSES['canceled']
+
         if status != 200:
             logger.error(
                 msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
             )
-            return 500, {}
+            return 500, TICKET_STATUSES['waiting']
 
         payment_status = response_data['status']['value']
         if payment_status not in self.payment_success_statuses:
             logger.error(
                 msg=f'Платеж {payment_id} не прошел',
             )
-            return 400, {} #TODO
+            return 400, TICKET_STATUSES['canceled']
 
         if payment_status == self.payment_done_status:
             logger.info(
                 msg=f'Платеж {payment_id} прошел успешно'
             )
-            return 200, {} #TODO
+            return 200, TICKET_STATUSES['active']
 
         logger.info(
             msg=f'Платеж {payment_id} в обработке',
         )
-        return 200, {} #TODO
+        return 200, TICKET_STATUSES['waiting']
 
 
 def get_user_tickets(user: User) -> (int, list):
