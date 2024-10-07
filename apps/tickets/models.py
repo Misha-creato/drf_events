@@ -10,6 +10,7 @@ from utils.constants import (
     NOTIFICATION_STATUSES,
 )
 
+
 User = get_user_model()
 
 
@@ -41,20 +42,16 @@ class Ticket(models.Model):
         verbose_name='Секция',
         max_length=64,
         null=True,
-        blank=True
     )
     row = models.CharField(
         verbose_name='Ряд',
         max_length=64,
         null=True,
-        blank=True
     )
     price = models.DecimalField(
         verbose_name='Цена за место',
         max_digits=7,
         decimal_places=2,
-        null=True,
-        blank=True,
     )
     seat = models.CharField(
         verbose_name='Место',
@@ -62,8 +59,9 @@ class Ticket(models.Model):
     )
     status = models.CharField(
         verbose_name='Статус использования',
-        choices=TICKET_STATUSES,
-        default=TICKET_STATUSES[0],
+        choices=list(TICKET_STATUSES.values()),
+        default=TICKET_STATUSES['active'],
+        blank=True,
     )
     bought_at = models.DateTimeField(
         verbose_name='Дата и время покупки',
@@ -73,6 +71,17 @@ class Ticket(models.Model):
         verbose_name='Статус оповещения',
         choices=NOTIFICATION_STATUSES,
         default=NOTIFICATION_STATUSES[0],
+        blank=True,
+    )
+    check_count = models.PositiveIntegerField(
+        verbose_name='Количество попыток проверки',
+        default=0,
+        blank=True,
+    )
+    status_updated = models.DateTimeField(
+        verbose_name='Время последнего обновления статуса',
+        null=True,
+        blank=True,
     )
 
     def save(self, *args, **kwargs):
