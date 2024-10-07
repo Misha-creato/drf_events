@@ -28,12 +28,14 @@ AGE_LIMITS = (
     (21, 'от 21 года'),
 )
 
-TICKET_STATUSES = (
-    ('waiting_payment', 'Ожидание оплаты'),
-    ('active', 'Активный'),
-    ('used', 'Использованный'),
-    ('expired', 'Просроченный'),
-)
+
+TICKET_STATUSES = {
+    'waiting': ('waiting', 'Ожидание оплаты'),
+    'active': ('active', 'Активный'),
+    'used': ('used', 'Использованный'),
+    'expired': ('expired', 'Просроченный'),
+    'canceled': ('canceled', 'Отмененный')
+}
 
 
 NOTIFICATION_STATUSES = (
