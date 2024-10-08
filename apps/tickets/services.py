@@ -25,10 +25,12 @@ from tickets.serializer import (
 )
 from tickets.models import Ticket
 
-from utils import redis_cache
+from utils import (
+    redis_cache,
+    constants,
+)
 from utils.constants import TICKET_STATUSES
 from utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 User = get_user_model()
@@ -109,6 +111,9 @@ class Payment:
             data = response.json()
         else:
             data = response.content
+
+        if status == 500 and 'not found' in data['message'].lower():
+            status = 404
         return status, data
 
     def buy(self, user: User, data: QueryDict) -> (int, dict):
@@ -153,11 +158,7 @@ class Payment:
             event = Event.objects.filter(
                 id=event_id,
                 canceled=False,
-            ).prefetch_related(
-                Prefetch('tickets',
-                         queryset=Ticket.objects.exclude(
-                             status=TICKET_STATUSES['canceled'][0],
-                         ))
+                end_at__gt=timezone.now(),
             ).first()
         except Exception as exc:
             logger.error(
@@ -171,6 +172,28 @@ class Payment:
             )
             return 404, {}
 
+        try:
+            landings = list(event.landings.filter(
+                quantity__gt=0,
+            ).values('section', 'row'))
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при получении доступных посадок по мероприятию '
+                    f'{event_id}: {exc}',
+            )
+            return 500, {}
+
+        seat_data = data['seat_data']
+        landing_data = seat_data.copy()
+        landing_data.pop('seat')
+
+        if landing_data not in landings:
+            logger.error(
+                msg=f'Некорректные данные для покупки билета {data} пользователем '
+                    f'{user}: Посадка по данным {seat_data} не доступна или не существует',
+            )
+            return 400, {}
+
         key_pattern = f'*event{event_id}*'
         status, matching_keys = redis_cache.get_matching_keys(
             key_pattern=key_pattern,
@@ -182,7 +205,6 @@ class Payment:
             )
             return status, {}
 
-        seat_data = data['seat_data']
         for key in matching_keys:
             status, key_data = redis_cache.get(
                 key=key,
@@ -192,13 +214,15 @@ class Payment:
 
             if seat_data == key_data['seat_data'] and user.id != key_data['user']:
                 logger.error(
-                    msg=f'Некорретные данные для покупки билета {data} пользователем'
+                    msg=f'Некорретные данные для покупки билета {data} пользователем '
                         f'{user}',
                 )
                 return 400, {}
 
         try:
-            tickets = list(event.tickets.all().values('section', 'row', 'seat'))
+            tickets = list(event.tickets.exclude(
+                status=constants.canceled,
+            ).values('section', 'row', 'seat'))
         except Exception as exc:
             logger.error(
                 msg=f'Возникла ошибка при получении билетов мероприятия по id '
@@ -279,7 +303,7 @@ class Payment:
         response_data = {
             'pay_url': pay_url,
         }
-        return 200, response_data
+        return 200, {}
 
     def confirm_buying(self, bill_id: str) -> (int, dict):
         '''
@@ -301,18 +325,14 @@ class Payment:
             method='get',
             path=path,
         )
-        if status == 500 and 'not found' in response_data['message'].lower():
-            logger.error(
-                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
-                    f'{response_data}',
-            )
-            return 404, {}
 
         if status != 200:
             logger.error(
                 msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}:'
                     f'{response_data}',
             )
+            if status == 404:
+                return status, {}
             return 500, {}
 
         bill_status = response_data['status']['value']
@@ -320,9 +340,16 @@ class Payment:
             logger.error(
                 msg=f'Не удалось подтвердить покупку по счету {bill_id}',
             )
-            return 400, {} #Todo
+            return 400, {}  # Todo
 
-        payment_data = response_data['payments'][0]
+        payments = response_data.get('payments')
+        if not payments:
+            logger.info(
+                msg=f'Ожидание оплаты счета {bill_id} со стороны пользователя',
+            )
+            return 500, {} #Todo
+
+        payment_data = payments[0]
         payment_id = payment_data['paymentId']
         payment_status = payment_data['status']['value']
 
@@ -352,9 +379,9 @@ class Payment:
             )
             return status, {}
 
-        ticket_status = TICKET_STATUSES[1]
-        if payment_status == 'WAITING':
-            ticket_status = TICKET_STATUSES[0]
+        ticket_status = constants.waiting
+        if payment_status == self.payment_done_status:
+            ticket_status = constants.active
 
         seat_data = key_data['seat_data']
         try:
@@ -403,35 +430,32 @@ class Payment:
             method='get',
             path=path,
         )
-        if status == 500 and 'not found' in response_data['message'].lower():
-            logger.error(
-                msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
-            )
-            return 404, TICKET_STATUSES['canceled']
 
         if status != 200:
             logger.error(
                 msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
             )
-            return 500, TICKET_STATUSES['waiting']
+            if status == 404:
+                return status, constants.waiting
+            return 500, constants.waiting
 
         payment_status = response_data['status']['value']
         if payment_status not in self.payment_success_statuses:
             logger.error(
                 msg=f'Платеж {payment_id} не прошел',
             )
-            return 400, TICKET_STATUSES['canceled']
+            return 400, constants.canceled
 
         if payment_status == self.payment_done_status:
             logger.info(
                 msg=f'Платеж {payment_id} прошел успешно'
             )
-            return 200, TICKET_STATUSES['active']
+            return 200,constants.active
 
         logger.info(
             msg=f'Платеж {payment_id} в обработке',
         )
-        return 200, TICKET_STATUSES['waiting']
+        return 200, constants.waiting
 
 
 def get_user_tickets(user: User) -> (int, list):
@@ -543,5 +567,3 @@ def check_ticket_qr(data: QueryDict) -> (int, dict):
         msg=f'Успешно проверены qr данные билета {data}',
     )
     return 200, {}
-
-
