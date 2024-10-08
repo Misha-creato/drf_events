@@ -8,6 +8,7 @@ from events.models import Event
 from utils.constants import (
     TICKET_STATUSES,
     NOTIFICATION_STATUSES,
+    active,
 )
 
 
@@ -59,8 +60,8 @@ class Ticket(models.Model):
     )
     status = models.CharField(
         verbose_name='Статус использования',
-        choices=list(TICKET_STATUSES.values()),
-        default=TICKET_STATUSES['active'],
+        choices=TICKET_STATUSES,
+        default=active,
         blank=True,
     )
     bought_at = models.DateTimeField(
