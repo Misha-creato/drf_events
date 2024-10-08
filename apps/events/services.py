@@ -13,8 +13,10 @@ from events.serializers import (
 
 from tickets.models import Ticket
 
-from utils import redis_cache
-from utils.constants import TICKET_STATUSES
+from utils import (
+    redis_cache,
+    constants,
+)
 from utils.logger import get_logger
 
 User = get_user_model()
@@ -166,7 +168,7 @@ def get_event(user: User | AnonymousUser, slug: str) -> (int, dict):
         ).prefetch_related(
             Prefetch('tickets',
                      queryset=Ticket.objects.exclude(
-                         status=TICKET_STATUSES['canceled'][0],
+                         status=constants.canceled,
                      )),
             'landings',
         ).first()
