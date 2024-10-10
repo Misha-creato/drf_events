@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from tickets.models import Ticket
@@ -38,5 +40,5 @@ class TicketBuySerializer(serializers.Serializer):
     price = serializers.DecimalField(
         max_digits=7,
         decimal_places=2,
-        min_value=1,
+        min_value=Decimal(1),
     )
