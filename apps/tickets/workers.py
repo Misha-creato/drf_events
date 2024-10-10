@@ -159,7 +159,11 @@ def check_bill_status() -> None:
         status, data = payment.confirm_buying(
             bill_id=bill,
         )
-        if status != 500:
+        key_pattern = f'*bill{bill}*'
+        redis_status, keys = redis_cache.get_matching_keys(
+            key_pattern=key_pattern,
+        )
+        if status != 500 or not keys:
             redis_cache.remove_from_list(
                 key='bills_to_check',
                 value=bill,
@@ -191,9 +195,11 @@ def check_payment_status() -> None:
     for ticket in tickets:
         status, ticket_status = payment.check_payment(
             payment_id=ticket.payment_id,
-        )
+        ) # возвращать статус эквайринга??
         ticket.status = ticket_status
         ticket.check_count += 1
         ticket.status_updated = timezone.now()
 
-    Ticket.objects.bulk_update(tickets, ['status'])
+    Ticket.objects.bulk_update(tickets, [
+        'status', 'check_count', 'status_updated',
+    ])
