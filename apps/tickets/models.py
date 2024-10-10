@@ -59,10 +59,16 @@ class Ticket(models.Model):
         max_length=32,
     )
     status = models.CharField(
-        verbose_name='Статус использования',
+        verbose_name='Статус',
         choices=TICKET_STATUSES,
         default=active,
         blank=True,
+    )
+    acquiring_status = models.CharField(
+        verbose_name='Статус эквайринга',
+    )
+    payment_id = models.CharField(
+        verbose_name='Id платежа',
     )
     bought_at = models.DateTimeField(
         verbose_name='Дата и время покупки',
@@ -71,7 +77,7 @@ class Ticket(models.Model):
     notification_status = models.CharField(
         verbose_name='Статус оповещения',
         choices=NOTIFICATION_STATUSES,
-        default=NOTIFICATION_STATUSES[0],
+        default=NOTIFICATION_STATUSES[0][0],
         blank=True,
     )
     check_count = models.PositiveIntegerField(
@@ -84,6 +90,9 @@ class Ticket(models.Model):
         null=True,
         blank=True,
     )
+
+    def __str__(self):
+        return f'{self.uuid}'
 
     def save(self, *args, **kwargs):
         if not self.uuid:
