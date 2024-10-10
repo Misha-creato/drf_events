@@ -19,6 +19,7 @@ from utils import (
 )
 from utils.logger import get_logger
 
+
 User = get_user_model()
 logger = get_logger(__name__)
 
