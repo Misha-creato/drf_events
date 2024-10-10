@@ -1,5 +1,6 @@
 from datetime import (
-    timedelta
+    timedelta,
+    datetime
 )
 
 import requests
@@ -112,7 +113,7 @@ class Payment:
         else:
             data = response.content
 
-        if status == 500 and 'not found' in data['message'].lower():
+        if status == 500 and 'not found' in response.json()['message'].lower():
             status = 404
         return status, data
 
@@ -156,7 +157,7 @@ class Payment:
         event_id = data['event_id']
         try:
             event = Event.objects.filter(
-                id=event_id,
+                id=int(event_id),
                 canceled=False,
                 end_at__gt=timezone.now(),
             ).first()
@@ -212,12 +213,14 @@ class Payment:
             if status != 200:
                 return status, {}
 
-            if seat_data == key_data['seat_data'] and user.id != key_data['user']:
-                logger.error(
-                    msg=f'Некорретные данные для покупки билета {data} пользователем '
-                        f'{user}',
-                )
-                return 400, {}
+            if seat_data == key_data['seat_data']:
+                if user.id != key_data['user']:
+                    logger.error(
+                        msg=f'Некорретные данные для покупки билета {data} пользователем '
+                            f'{user}',
+                    )
+                    return 400, {}
+                redis_cache.delete(key=key)
 
         try:
             tickets = list(event.tickets.exclude(
@@ -241,13 +244,14 @@ class Payment:
             msg=f'Создание счета для оплаты билета {data} пользователю {user}',
         )
         price = str(data['price'])
+        # у qiwi время идет с опозданием на 11 минут
+        expiration_datetime = datetime.now().isoformat(timespec='seconds') + '+05:00'
         bill_data = {
             "amount": {
                 "currency": "KZT",
                 "value": price
             },
-            "expirationDateTime": (timezone.now() + timedelta(minutes=10)).
-            isoformat(timespec='seconds'),
+            "expirationDateTime": expiration_datetime,
             "comment": f"Оплата билета на мероприятие {event.name}",
             "customer": {
                 "email": user.email,
@@ -277,7 +281,7 @@ class Payment:
         status = redis_cache.set_key(
             key=key,
             data=ticket_data,
-            time=600
+            time=600,
         )
         if status != 200:
             logger.error(
@@ -303,7 +307,7 @@ class Payment:
         response_data = {
             'pay_url': pay_url,
         }
-        return 200, {}
+        return 200, response_data
 
     def confirm_buying(self, bill_id: str) -> (int, dict):
         '''
@@ -338,9 +342,10 @@ class Payment:
         bill_status = response_data['status']['value']
         if bill_status not in self.bill_success_statuses:
             logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                    f'Статус счета {bill_status}',
             )
-            return 400, {}  # Todo
+            return 400, {}  #Todo
 
         payments = response_data.get('payments')
         if not payments:
@@ -355,9 +360,10 @@ class Payment:
 
         if payment_status not in self.payment_success_statuses:
             logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                    f'Статус платежа {payment_status}',
             )
-            return 400, {}  # Todo
+            return 400, {}  #Todo
 
         key_pattern = f'*bill{bill_id}*'
         status, keys = redis_cache.get_matching_keys(
@@ -365,7 +371,8 @@ class Payment:
         )
         if status != 200 or not keys:
             logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                    f'Ошибка redis или временная недоступна',
             )
             return status, {}
 
@@ -375,7 +382,8 @@ class Payment:
         )
         if status != 200:
             logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}',
+                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                    f'Ошибка redis или временная недоступна',
             )
             return status, {}
 
@@ -386,18 +394,21 @@ class Payment:
         seat_data = key_data['seat_data']
         try:
             Ticket.objects.create(
-                event=key_data['event'],
-                user=key_data['user'],
+                event_id=key_data['event'],
+                user_id=key_data['user'],
                 section=seat_data['section'],
                 row=seat_data['row'],
                 seat=seat_data['seat'],
                 price=key_data['price'],
                 status=ticket_status,
                 payment_id=payment_id,
+                acquiring_status=payment_status,
+                status_updated=timezone.now(),
             )
         except Exception as exc:
             logger.error(
-                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}',
+                msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}: '
+                    f'{exc}',
             )
             return 500, {}
 
@@ -432,11 +443,15 @@ class Payment:
         )
 
         if status != 200:
+            if status == 404:
+                logger.error(
+                    msg=f'Возникла ошибка при проверке статуса платежа {payment_id}. '
+                        f'Платеж не найден',
+                )
+                return status, constants.canceled
             logger.error(
                 msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
             )
-            if status == 404:
-                return status, constants.waiting
             return 500, constants.waiting
 
         payment_status = response_data['status']['value']
