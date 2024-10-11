@@ -34,9 +34,11 @@ active = 'active'
 used = 'used'
 expired = 'expired'
 canceled = 'canceled'
+unknown = 'unknown'
 
 
 TICKET_STATUSES = (
+    (unknown, 'Неизвестный'),
     (waiting, 'Ожидание оплаты'),
     (active, 'Активный'),
     (used, 'Использованный'),
