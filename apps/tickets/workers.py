@@ -1,15 +1,21 @@
 import datetime
 
+from django.db.models import (
+    Count,
+    Q,
+    F,
+)
 from django.utils import timezone
+
+from events.models import Landing
 
 from tickets.services import Payment
 from tickets.tasks import notify_users
 from tickets.models import Ticket
 
-from utils import redis_cache
+from utils import redis_cache, constants
 from utils.logger import get_logger
 from utils.constants import (
-    TICKET_STATUSES,
     NOTIFY_DAY_IN_DAY,
     NOTIFY_3_DAYS,
     NOTIFY_EXPIRED
@@ -22,7 +28,7 @@ payment = Payment()
 
 def user_event_notification(notification_status: str) -> None:
     '''
-    Получение билетов по мероприятиям и оповещение пользователей
+    Оповещение пользователей по билетам
 
     Args:
         notification_status: статус оповещения
@@ -49,7 +55,8 @@ def user_event_notification(notification_status: str) -> None:
             email_type = NOTIFY_3_DAYS
         case 'expired':
             filters['notification_status__in'] = ['no_notify',
-                                                  '3_days', 'day_in_day']
+                                                  '3_days',
+                                                  'day_in_day', ]
             filters['status'] = 'expired'
             email_type = NOTIFY_EXPIRED
         case _:
@@ -122,7 +129,7 @@ def update_ticket_status() -> None:
             status='active',
             event__end_at__lte=timezone.now()
         )
-        tickets.update(status=TICKET_STATUSES[2])
+        tickets.update(status=constants.expired)
     except Exception as exc:
         logger.error(
             msg=f'Не удалось обновить статус просроченных билетов: {exc}',
@@ -170,7 +177,7 @@ def check_bill_status() -> None:
             )
 
 
-def check_payment_status() -> None:
+def check_payment_status() -> bool:
     '''
     Проверка статусов платежей в ожидании
 
@@ -179,7 +186,7 @@ def check_payment_status() -> None:
     '''
 
     logger.info(
-        msg=f'Проверка статусов платежей в ожидании',
+        msg=f'Проверка статусов платежей билетов в ожидании',
     )
 
     try:
@@ -190,16 +197,40 @@ def check_payment_status() -> None:
         logger.error(
             msg=f'Возникла ошибка при проверке статусов платежей в ожидании: {exc}',
         )
-        return
+        return False
 
     for ticket in tickets:
-        status, ticket_status = payment.check_payment(
+        status, data = payment.check_payment(
             payment_id=ticket.payment_id,
-        ) # возвращать статус эквайринга??
+        )
+        acquiring_status = data['acquiring_status']
+        ticket_status = data['ticket_status']
+
         ticket.status = ticket_status
+        ticket.acquiring_status = acquiring_status if acquiring_status else ticket.acquiring_status
         ticket.check_count += 1
         ticket.status_updated = timezone.now()
 
-    Ticket.objects.bulk_update(tickets, [
-        'status', 'check_count', 'status_updated',
-    ])
+    if tickets:
+        try:
+            landings = Landing.objects.filter(event__end_at__gte=timezone.now())
+            landings = landings.annotate(tickets_count=Count(
+                'event__tickets',
+                filter=Q(event__tickets__section=F('section')) &
+                       Q(event__tickets__row=F('row')) &
+                       ~Q(event__tickets__status=constants.canceled)
+                )
+            )
+            for landing in landings:
+                landing.quantity -= landing.tickets_count
+            Landing.objects.bulk_update(landings, ['quantity'])
+            Ticket.objects.bulk_update(tickets, [
+                'status', 'acquiring_status', 'check_count', 'status_updated',
+            ])
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при проверке статусов билетов в ожидании: {exc}',
+            )
+            return False
+
+    return True
