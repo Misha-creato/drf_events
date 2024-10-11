@@ -7,7 +7,6 @@ import requests
 import uuid
 
 from django.contrib.auth import get_user_model
-from django.db.models import Prefetch
 from django.http import QueryDict
 from django.utils import timezone
 
@@ -17,7 +16,7 @@ from config.settings import (
     PAYMENT_SITE_ID,
 )
 
-from events.models import Event
+from events.models import Event, Landing
 
 from tickets.serializer import (
     TicketSerializer,
@@ -33,6 +32,7 @@ from utils import (
 from utils.constants import TICKET_STATUSES
 from utils.logger import get_logger
 
+
 logger = get_logger(__name__)
 User = get_user_model()
 
@@ -42,10 +42,17 @@ class Payment:
         'CREATED',
         'PAID',
     ]
+    bill_fail_statuses = [
+        'EXPIRED',
+        'DECLINED',
+    ]
     payment_done_status = 'COMPLETED'
     payment_success_statuses = [
         'WAITING',
         payment_done_status,
+    ]
+    payment_fail_statuses = [
+        'DECLINED',
     ]
     url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}'
     headers = {
@@ -341,29 +348,46 @@ class Payment:
 
         bill_status = response_data['status']['value']
         if bill_status not in self.bill_success_statuses:
-            logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
-                    f'Статус счета {bill_status}',
-            )
-            return 400, {}  #Todo
+            if bill_status in self.bill_fail_statuses:
+                logger.error(
+                    msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                        f'Статус счета {bill_status}',
+                )
+                return 400, {}  #Todo
+
+            else:
+                logger.error(
+                    msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                        f'Получен неизвестный статус счета {bill_status}',
+                )
+                return 500, {}
 
         payments = response_data.get('payments')
         if not payments:
             logger.info(
                 msg=f'Ожидание оплаты счета {bill_id} со стороны пользователя',
             )
-            return 500, {} #Todo
+            return 500, {}
 
         payment_data = payments[0]
         payment_id = payment_data['paymentId']
         payment_status = payment_data['status']['value']
 
+        ticket_status = constants.waiting
         if payment_status not in self.payment_success_statuses:
-            logger.error(
-                msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
-                    f'Статус платежа {payment_status}',
-            )
-            return 400, {}  #Todo
+            if payment_status in self.payment_fail_statuses:
+                logger.error(
+                    msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
+                        f'Статус платежа {payment_status}',
+                )
+                return 400, {}  #Todo
+
+            else:
+                logger.error(
+                    msg=f'При подтверждении покупки по счету {bill_id} получен '
+                        f'неизвестный статус платежа {payment_status}',
+                )
+                ticket_status = constants.unknown
 
         key_pattern = f'*bill{bill_id}*'
         status, keys = redis_cache.get_matching_keys(
@@ -387,17 +411,18 @@ class Payment:
             )
             return status, {}
 
-        ticket_status = constants.waiting
         if payment_status == self.payment_done_status:
             ticket_status = constants.active
 
         seat_data = key_data['seat_data']
+        section = seat_data['section']
+        row = seat_data['row']
         try:
-            Ticket.objects.create(
+            ticket = Ticket.objects.create(
                 event_id=key_data['event'],
                 user_id=key_data['user'],
-                section=seat_data['section'],
-                row=seat_data['row'],
+                section=section,
+                row=row,
                 seat=seat_data['seat'],
                 price=key_data['price'],
                 status=ticket_status,
@@ -405,6 +430,13 @@ class Payment:
                 acquiring_status=payment_status,
                 status_updated=timezone.now(),
             )
+            landing = Landing.objects.filter(
+                event=ticket.event,
+                section=section,
+                row=row,
+            ).first()
+            landing.quantity -= 1
+            landing.save()
         except Exception as exc:
             logger.error(
                 msg=f'Возникла ошибка при подтверждении покупки по счету {bill_id}: '
@@ -421,7 +453,7 @@ class Payment:
         )
         return 200, {}
 
-    def check_payment(self, payment_id: str) -> (int, tuple):
+    def check_payment(self, payment_id: str) -> (int, dict):
         '''
         Проверка статуса платежа по id
 
@@ -442,35 +474,54 @@ class Payment:
             path=path,
         )
 
+        data = {
+            'acquiring_status': None
+        }
         if status != 200:
             if status == 404:
                 logger.error(
                     msg=f'Возникла ошибка при проверке статуса платежа {payment_id}. '
                         f'Платеж не найден',
                 )
-                return status, constants.canceled
+                data['ticket_status'] = constants.canceled
+                return status, data
+
             logger.error(
                 msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
             )
-            return 500, constants.waiting
+            data['ticket_status'] = constants.waiting
+            return 500, data
 
         payment_status = response_data['status']['value']
+        data['acquiring_status'] = payment_status
         if payment_status not in self.payment_success_statuses:
-            logger.error(
-                msg=f'Платеж {payment_id} не прошел',
-            )
-            return 400, constants.canceled
+            if payment_status in self.payment_fail_statuses:
+                logger.error(
+                    msg=f'Платеж {payment_id} не прошел',
+                )
+                data['ticket_status'] = constants.canceled
+                return 400, data
+
+            else:
+                logger.error(
+                    msg=f'При проверке платежа {payment_id} получен неизвестный '
+                        f'статус {payment_status}',
+                )
+                data['ticket_status'] = constants.unknown
+                return 500, data
 
         if payment_status == self.payment_done_status:
             logger.info(
                 msg=f'Платеж {payment_id} прошел успешно'
             )
-            return 200,constants.active
+            data['ticket_status'] = constants.active
+            return 200, data
 
         logger.info(
             msg=f'Платеж {payment_id} в обработке',
         )
-        return 200, constants.waiting
+        data['ticket_status'] = constants.waiting
+        return 200, data
 
 
 def get_user_tickets(user: User) -> (int, list):
