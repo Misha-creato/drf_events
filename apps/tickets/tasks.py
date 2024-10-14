@@ -8,6 +8,7 @@ from config.settings import (
 )
 
 from notifications.services import Email
+from tickets.api import payment
 
 from utils.logger import get_logger
 
@@ -58,3 +59,39 @@ def notify_users(event_data: dict, recipient_list: list, email_type: str) -> int
     )
     status = email.send()
     return status
+
+
+@shared_task
+def check_bill(bill_id: str) -> int:
+    '''
+    Асинхронная проверка статуса счета
+
+    Args:
+        bill_id: id счета
+
+    Returns:
+        Код статуса
+    '''
+
+    status = payment.confirm_buying(
+        bill_id=bill_id,
+    )
+    return status
+
+
+@shared_task
+def check_payment(payment_id: str) -> (int, dict):
+    '''
+    Асинхронная проверка статуса платежа
+
+    Args:
+        payment_id: id платежа
+
+    Returns:
+        Код статуса и словарь данных
+    '''
+
+    status, data = payment.check_payment(
+        payment_id=payment_id,
+    )
+    return status, data
