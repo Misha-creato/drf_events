@@ -1,16 +1,18 @@
 import datetime
 
 from django.db.models import (
-    Count,
     Q,
-    F,
 )
 from django.utils import timezone
 
 from events.models import Landing
 
 from tickets.services import Payment
-from tickets.tasks import notify_users
+from tickets.tasks import (
+    notify_users,
+    check_bill,
+    check_payment,
+)
 from tickets.models import Ticket
 
 from utils import redis_cache, constants
@@ -146,11 +148,11 @@ def check_bill_status() -> None:
     Проверка статусов счетов для оплаты из списка redis
 
     Returns:
-    None
+        None
     '''
 
     logger.info(
-        msg=f'Проверка статусов счетов для оплаты из списка redis',
+        msg='Проверка статусов счетов для оплаты из списка redis',
     )
 
     status, bills = redis_cache.get_list(
@@ -158,23 +160,27 @@ def check_bill_status() -> None:
     )
     if status != 200:
         logger.error(
-            msg=f'Возникла ошибка при проверку статусов счетов для оплаты',
+            msg='Возникла ошибка при проверку статусов счетов для оплаты',
         )
         return
 
     for bill in bills:
-        status, data = payment.confirm_buying(
+        status = check_bill.delay(
             bill_id=bill,
         )
         key_pattern = f'*bill{bill}*'
         redis_status, keys = redis_cache.get_matching_keys(
             key_pattern=key_pattern,
         )
-        if status != 500 or not keys:
+        if status.get() != 500 or (redis_status == 200 and not keys):
             redis_cache.remove_from_list(
                 key='bills_to_check',
                 value=bill,
             )
+
+    logger.info(
+        msg=f'Проверены статусы {len(bills)} счетов',
+    )
 
 
 def check_payment_status() -> bool:
@@ -182,26 +188,29 @@ def check_payment_status() -> bool:
     Проверка статусов платежей в ожидании
 
     Returns:
-    None
+        True/False
     '''
 
     logger.info(
-        msg=f'Проверка статусов платежей билетов в ожидании',
+        msg='Проверка статусов платежей билетов в ожидании',
     )
 
     try:
         tickets = Ticket.objects.filter(
             status='waiting',
-        )
+        ).select_related('event')
     except Exception as exc:
         logger.error(
             msg=f'Возникла ошибка при проверке статусов платежей в ожидании: {exc}',
         )
         return False
 
+    landing_filters = []
+
     for ticket in tickets:
-        status, data = payment.check_payment(
-            payment_id=ticket.payment_id,
+        payment_id = ticket.payment_id
+        status, data = check_payment.delay(
+            payment_id=payment_id,
         )
         acquiring_status = data['acquiring_status']
         ticket_status = data['ticket_status']
@@ -211,26 +220,51 @@ def check_payment_status() -> bool:
         ticket.check_count += 1
         ticket.status_updated = timezone.now()
 
+        if ticket_status == constants.canceled:
+            filter_dict = {
+                'event': ticket.event,
+                'section': ticket.section,
+                'row': ticket.row,
+            }
+            landing_filters.append(filter_dict)
+
     if tickets:
         try:
-            landings = Landing.objects.filter(event__end_at__gte=timezone.now())
-            landings = landings.annotate(tickets_count=Count(
-                'event__tickets',
-                filter=Q(event__tickets__section=F('section')) &
-                       Q(event__tickets__row=F('row')) &
-                       ~Q(event__tickets__status=constants.canceled)
-                )
-            )
-            for landing in landings:
-                landing.quantity -= landing.tickets_count
-            Landing.objects.bulk_update(landings, ['quantity'])
             Ticket.objects.bulk_update(tickets, [
                 'status', 'acquiring_status', 'check_count', 'status_updated',
             ])
         except Exception as exc:
             logger.error(
-                msg=f'Возникла ошибка при проверке статусов билетов в ожидании: {exc}',
+                msg=f'Возникла ошибка при проверке статусов билетов в ожидании. '
+                    f'Обновление билетов: {exc}',
             )
             return False
 
+    if landing_filters:
+        query_filter = Q()
+        for filter_dict in landing_filters:
+            filter_object = Q(event=filter_dict['event'])
+            filter_object &= Q(section=filter_dict['section'])
+            filter_object &= Q(row=filter_dict['row'])
+
+            query_filter |= filter_object
+
+        try:
+            landings = (Landing.objects.filter(query_filter).
+                        select_related('event'))
+
+            for landing in landings:
+                landing.quantity -= landing.tickets_count
+
+            Landing.objects.bulk_update(landings, ['quantity'])
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при проверке статусов билетов в ожидании. '
+                    f'Обновление посадок: {exc}',
+            )
+            return False
+
+    logger.info(
+        msg=f'Проверены статусы платежей {len(tickets)} билетов в ожидании',
+    )
     return True
