@@ -67,6 +67,14 @@ class Ticket(models.Model):
     acquiring_status = models.CharField(
         verbose_name='Статус эквайринга',
     )
+    refund_status = models.CharField(
+        verbose_name='Статус возврата',
+    )
+    refund_id = models.CharField(
+        verbose_name='Id возрата',
+        null=True,
+        blank=True,
+    )
     payment_id = models.CharField(
         verbose_name='Id платежа',
     )
