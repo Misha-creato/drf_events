@@ -29,17 +29,32 @@ AGE_LIMITS = (
 )
 
 
-waiting = 'waiting'
+waiting_payment = 'waiting'
 active = 'active'
 used = 'used'
 expired = 'expired'
 canceled = 'canceled'
 unknown = 'unknown'
 
+# REFUND STATUSES
+no_refund = 'no refund'
+need_refund = 'need refund'
+waiting_refund = 'waiting refund'
+success_refund = 'success refund'
+fail_refund = 'fail refund'
+
+REFUND_STATUSES = (
+    (no_refund, 'Не нужен возврат'),
+    (need_refund, 'Нужен возврат'),
+    (waiting_refund, 'Ожидание возврата'),
+    (success_refund, 'Удачный возврат'),
+    (fail_refund, 'Ошибка возврата'),
+    (unknown, 'Неизвестный'),
+)
 
 TICKET_STATUSES = (
     (unknown, 'Неизвестный'),
-    (waiting, 'Ожидание оплаты'),
+    (waiting_payment, 'Ожидание оплаты'),
     (active, 'Активный'),
     (used, 'Использованный'),
     (expired, 'Просроченный'),
