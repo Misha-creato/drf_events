@@ -80,7 +80,7 @@ def check_bill(bill_id: str) -> int:
 
 
 @shared_task
-def check_payment(payment_id: str) -> (int, dict):
+def check_payment(payment_id: str) -> dict:
     '''
     Асинхронная проверка статуса платежа
 
@@ -94,4 +94,44 @@ def check_payment(payment_id: str) -> (int, dict):
     status, data = payment.check_payment(
         payment_id=payment_id,
     )
-    return status, data
+    return data
+
+
+@shared_task
+def refund(payment_id: str, amount: str) -> dict:
+    '''
+    Асинхронный возврат средств по платежу
+
+    Args:
+        payment_id: id платежа
+        amount: сумма возрата
+
+    Returns:
+        Словарь данных
+    '''
+
+    status, data = payment.refund(
+        payment_id=payment_id,
+        amount=amount,
+    )
+    return data
+
+
+@shared_task
+def check_refund(payment_id: str, refund_id: str) -> dict:
+    '''
+    Асинхронная проверка статуса возрата средств
+
+    Args:
+        payment_id: id платежа
+        refund_id: id возврата
+
+    Returns:
+        Словарь данных
+    '''
+
+    status, data = payment.check_refund(
+        payment_id=payment_id,
+        refund_id=refund_id,
+    )
+    return data
