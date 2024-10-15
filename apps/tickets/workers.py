@@ -12,6 +12,8 @@ from tickets.tasks import (
     notify_users,
     check_bill,
     check_payment,
+    refund,
+    check_refund,
 )
 from tickets.models import Ticket
 
@@ -198,6 +200,8 @@ def check_payment_status() -> bool:
     try:
         tickets = Ticket.objects.filter(
             status='waiting',
+        ).exclude(
+            event=None,
         ).select_related('event')
     except Exception as exc:
         logger.error(
@@ -206,12 +210,17 @@ def check_payment_status() -> bool:
         return False
 
     landing_filters = []
+    tickets_data = {}
 
     for ticket in tickets:
         payment_id = ticket.payment_id
-        status, data = check_payment.delay(
+        data = check_payment.delay(
             payment_id=payment_id,
         )
+        tickets_data[ticket.uuid] = data.get()
+
+    for ticket in tickets:
+        data = tickets_data[ticket.uuid]
         acquiring_status = data['acquiring_status']
         ticket_status = data['ticket_status']
 
@@ -252,9 +261,8 @@ def check_payment_status() -> bool:
         try:
             landings = (Landing.objects.filter(query_filter).
                         select_related('event'))
-
             for landing in landings:
-                landing.quantity -= landing.tickets_count
+                landing.quantity += 1
 
             Landing.objects.bulk_update(landings, ['quantity'])
         except Exception as exc:
@@ -266,5 +274,118 @@ def check_payment_status() -> bool:
 
     logger.info(
         msg=f'Проверены статусы платежей {len(tickets)} билетов в ожидании',
+    )
+    return True
+
+
+def need_refund() -> bool:
+    '''
+    закрывается площадка -> выборка активных билетов -≥
+    установка статуса "нужно вернуть" -≥ отправка запроса на возврат средств -≥
+    если вернулся успешный статус -≥ установка refund_status "refunded"/"waiting"
+    -≥ воркер на опрос билетов с статусом возврата waiting
+
+    Осуществление возврата средств для всех билетов со
+    статусом необходимости возврата
+
+    Returns:
+        True/False
+    '''
+
+    logger.info(
+        msg='Возврат средств для всех билетов со статусом возврата need_refund',
+    )
+
+    try:
+        tickets = Ticket.objects.filter(
+            refund_status=constants.need_refund,
+        ).select_related('events')
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при получении билетов для возврата средств: {exc}',
+        )
+        return False
+
+    tickets_data = {}
+    for ticket in tickets:
+        data = refund.delay(
+            payment_id=ticket.payment_id,
+            amount=str(ticket.price),
+        )
+        tickets_data[ticket.uuid] = data.get()
+
+    for ticket in tickets:
+        data = tickets_data[ticket.uuid]
+
+        refund_status = data['refund_status']
+        refund_id = data['refund_if']
+        ticket.refund_status = refund_status
+        ticket.refund_id = refund_id
+
+    if tickets:
+        try:
+            Ticket.objects.bulk_update(tickets, ['refund_status', 'refund_id'])
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при возврате средств у билетов со статусом '
+                    f'необходимости возврата. Обновление билетов: {exc}',
+            )
+            return False
+
+    logger.info(
+        msg=f'Осуществлен возврат средств у {len(tickets)} билетов',
+    )
+    return True
+
+
+def check_refund_status() -> bool:
+    '''
+    Проверка статуса возврата средств у билетов с возвратом в ожидании
+
+    Returns:
+        True/False
+    '''
+
+    logger.info(
+        msg='Проверка статуса возврата средств у билетов с возвратом в ожидании',
+    )
+
+    try:
+        tickets = Ticket.objects.filter(
+            refund_status=constants.waiting_refund,
+        ).select_related('event')
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при получении билетов с возвратом в ожидании: {exc}',
+        )
+        return False
+
+    tickets_data = {}
+    for ticket in tickets:
+        data = check_refund.delay(
+            payment_id=ticket.payment_id,
+            refund_id=ticket.refund_id,
+        )
+        tickets_data[ticket.uuid] = data.get()
+
+    for ticket in tickets:
+        data = tickets_data[ticket.uuid]
+        refund_status = data['refund_status']
+
+        ticket.refund_status = refund_status
+        #подсчет количества попыток проверки и статус эквайринга???
+
+    if tickets:
+        try:
+            Ticket.objects.bulk_update(tickets, ['refund_status'])
+        except Exception as exc:
+            logger.error(
+                msg=f'Возникла ошибка при проверке возврата средств у билетов. '
+                    f'Обновление билетов: {exc}',
+            )
+            return False
+
+    logger.info(
+        msg=f'Проверен статус возврата средств у {len(tickets)} билетов',
     )
     return True
