@@ -45,12 +45,22 @@ class Payment:
         'EXPIRED',
         'DECLINED',
     ]
+
     payment_done_status = 'COMPLETED'
     payment_success_statuses = [
         'WAITING',
         payment_done_status,
     ]
     payment_fail_statuses = [
+        'DECLINED',
+    ]
+
+    refund_done_status = 'COMPLETED'
+    refund_success_statuses = [
+        'WAITING',
+        refund_done_status,
+    ]
+    refund_fail_statuses = [
         'DECLINED',
     ]
     url = f'{PAYMENT_HOST}/sites/{PAYMENT_SITE_ID}'
@@ -351,7 +361,7 @@ class Payment:
                 msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
                     f'Статус счета {bill_status}',
             )
-            return 400  #Todo
+            return 400  # Todo
 
         if bill_status not in self.bill_success_statuses:
             logger.error(
@@ -371,13 +381,13 @@ class Payment:
         payment_id = payment_data['paymentId']
         payment_status = payment_data['status']['value']
 
-        ticket_status = constants.waiting
+        ticket_status = constants.waiting_payment
         if payment_status in self.payment_fail_statuses:
             logger.error(
                 msg=f'Не удалось подтвердить покупку по счету {bill_id}. '
                     f'Статус платежа {payment_status}',
             )
-            return 400  #Todo
+            return 400  # Todo
 
         if payment_status not in self.payment_success_statuses:
             logger.error(
@@ -458,7 +468,7 @@ class Payment:
             payment_id: id платежа
 
         Returns:
-        Код статуса и новый статус билета
+            Код статуса и словарь данных
         '''
 
         logger.info(
@@ -486,7 +496,7 @@ class Payment:
             logger.error(
                 msg=f'Возникла ошибка при проверке статуса платежа {payment_id}',
             )
-            data['ticket_status'] = constants.waiting
+            data['ticket_status'] = constants.waiting_payment
             return 500, data
 
         payment_status = response_data['status']['value']
@@ -517,7 +527,131 @@ class Payment:
         logger.info(
             msg=f'Платеж {payment_id} в обработке',
         )
-        data['ticket_status'] = constants.waiting
+        data['ticket_status'] = constants.waiting_payment
+        return 200, data
+
+    def refund(self, payment_id: str, amount: str) -> (int, dict):
+        '''
+        Возврат средств по id завершенного платежа
+
+        Args:
+            payment_id: id платежа
+            amount: сумма возврата
+
+        Returns:
+            Код статуса и словарь данных
+        '''
+
+        logger.info(
+            msg=f'Возврат средств по платежу {payment_id}',
+        )
+
+        refund_data = {
+            "amount": {
+                "currency": "KZT",
+                "value": amount,
+            }
+        }
+        refund_id = str(uuid.uuid4())
+        path = f'/payments/{payment_id}/refunds/{refund_id}/'
+        status, response_data = self.make_request(
+            method='put',
+            path=path,
+            json_data=refund_data,
+        )
+        data = {
+            'refund_id': refund_id,
+            'refund_status': constants.need_refund
+        }
+        if status != 200:
+            logger.error(
+                msg=f'Возникла ошибка при возврате средств по платежу {payment_id}:'
+                    f'{response_data}',
+            )
+            return 500, data
+
+        refund_status = response_data['status']['value']
+        if status in self.refund_fail_statuses:
+            logger.error(
+                msg=f'Не удалось осуществить возврат средств по платежу: {payment_id}.'
+                    f'Статус возврата {refund_status}',
+            )
+            data['refund_status'] = constants.fail_refund
+            return 400, data #TODO
+
+        if status not in self.payment_success_statuses:
+            logger.error(
+                msg=f'Не удалось осуществить возврат средств по платежу: {payment_id} '
+                    f'Неизвестный статус возврата {refund_status}',
+            )
+            data['refund_status'] = constants.unknown
+            return 400, data
+
+        data['refund_status'] = constants.waiting_refund
+        if refund_status == self.refund_done_status:
+            data['refund_status'] = constants.success_refund
+
+        logger.info(
+            msg=f'Осуществлен возврат средств по платежу {payment_id}. '
+                f'Статус возврата {refund_status}',
+        )
+        return 200, data
+
+    def check_refund(self, payment_id: str, refund_id: str) -> (int, dict):
+        '''
+        Проверка статуса возврата средств
+
+        Args:
+            payment_id: id платежа
+            refund_id: id возврата
+
+        Returns:
+            Код статуса и словарь данных
+        '''
+
+        logger.info(
+            msg=f'Проверка статуса возврата средств {refund_id} по '
+                f'платежy {payment_id}',
+        )
+        path = f'/payments/{payment_id}/refunds/{refund_id}/'
+        status, response_data = self.make_request(
+            method='get',
+            path=path,
+        )
+        data = {
+            'refund_status': constants.waiting_refund
+        }
+        if status != 200:
+            logger.error(
+                msg=f'Не удалось проверить статус возврата средств {refund_id} '
+                    f'по платежу {payment_id}: {response_data}',
+            )
+            return status, data
+
+        refund_status = response_data['status']['value']
+        if refund_status in self.refund_fail_statuses:
+            logger.error(
+                msg=f'Ошибка возврата средств {refund_id} по платежу {payment_id}.'
+                    f'Статус возврата {refund_status}',
+            )
+            data['refund_status'] = constants.fail_refund
+            return 400, data #todo
+
+        if refund_status not in self.payment_success_statuses:
+            logger.error(
+                msg=f'При проверка статуса возврата средств {refund_id} по платежу '
+                    f'{payment_id} получен неизвестный статус: {refund_status}',
+            )
+            data['refund_status'] = constants.unknown
+            return 400, data #todo
+
+        data['refund_status'] = constants.waiting_refund
+        if refund_status == self.refund_done_status:
+            logger.info(
+                msg=f'Успешный возврат средств {refund_id} по платежу {payment_id}',
+            )
+            data['refund_status'] = constants.success_refund
+
         return 200, data
 
 
