@@ -1,5 +1,7 @@
 import datetime
 
+from celery import group
+
 from django.db.models import (
     Q,
 )
@@ -166,15 +168,21 @@ def check_bill_status() -> None:
         )
         return
 
+    task_group = group(check_bill.s(bill_id=bill) for bill in bills)
+    result_group = task_group.apply_async()
+    results = result_group.join()
+
+    bills_data = {}
+    for result in results:
+        bills_data.update(result)
+
     for bill in bills:
-        status = check_bill.delay(
-            bill_id=bill,
-        )
+        status = bills_data[bill]
         key_pattern = f'*bill{bill}*'
         redis_status, keys = redis_cache.get_matching_keys(
             key_pattern=key_pattern,
         )
-        if status.get() != 500 or (redis_status == 200 and not keys):
+        if status != 500 or (redis_status == 200 and not keys):
             redis_cache.remove_from_list(
                 key='bills_to_check',
                 value=bill,
@@ -199,8 +207,8 @@ def check_payment_status() -> bool:
 
     try:
         tickets = Ticket.objects.filter(
-            status='waiting',
-        ).exclude(
+            status=constants.waiting_payment,
+        ).exclude( #лучше бы убрать
             event=None,
         ).select_related('event')
     except Exception as exc:
@@ -212,15 +220,18 @@ def check_payment_status() -> bool:
     landing_filters = []
     tickets_data = {}
 
-    for ticket in tickets:
-        payment_id = ticket.payment_id
-        data = check_payment.delay(
-            payment_id=payment_id,
-        )
-        tickets_data[ticket.uuid] = data.get()
+    task_group = group(check_payment.s(
+        payment_id=ticket.payment_id,
+        ticket_uuid=str(ticket.uuid),
+    ) for ticket in tickets)
+    result_group = task_group.apply_async()
+    results = result_group.join()
+
+    for result in results:
+        tickets_data.update(result)
 
     for ticket in tickets:
-        data = tickets_data[ticket.uuid]
+        data = tickets_data[str(ticket.uuid)]
         acquiring_status = data['acquiring_status']
         ticket_status = data['ticket_status']
 
@@ -236,6 +247,10 @@ def check_payment_status() -> bool:
                 'row': ticket.row,
             }
             landing_filters.append(filter_dict)
+
+        if ticket_status == constants.active:
+            if ticket.event.canceled:
+                ticket.status = constants.need_refund
 
     if tickets:
         try:
@@ -293,12 +308,12 @@ def need_refund() -> bool:
     '''
 
     logger.info(
-        msg='Возврат средств для всех билетов со статусом возврата need_refund',
+        msg='Возврат средств для всех билетов со статусом need_refund',
     )
 
     try:
         tickets = Ticket.objects.filter(
-            refund_status=constants.need_refund,
+            status=constants.need_refund,
         ).select_related('events')
     except Exception as exc:
         logger.error(
@@ -307,24 +322,33 @@ def need_refund() -> bool:
         return False
 
     tickets_data = {}
-    for ticket in tickets:
-        data = refund.delay(
-            payment_id=ticket.payment_id,
-            amount=str(ticket.price),
-        )
-        tickets_data[ticket.uuid] = data.get()
+
+    task_group = group(refund.s(
+        payment_id=ticket.payment_id,
+        amount=str(ticket.price),
+        ticket_uuid=str(ticket.uuid),
+    ) for ticket in tickets)
+
+    result_group = task_group.apply_async()
+    results = result_group.join()
+
+    for result in results:
+        tickets_data.update(result)
 
     for ticket in tickets:
         data = tickets_data[ticket.uuid]
 
         refund_status = data['refund_status']
         refund_id = data['refund_if']
-        ticket.refund_status = refund_status
+        ticket.status = refund_status
         ticket.refund_id = refund_id
+        ticket.status_updated = timezone.now()
 
     if tickets:
         try:
-            Ticket.objects.bulk_update(tickets, ['refund_status', 'refund_id'])
+            Ticket.objects.bulk_update(tickets, [
+                'status', 'refund_id', 'status_updated',
+            ])
         except Exception as exc:
             logger.error(
                 msg=f'Возникла ошибка при возврате средств у билетов со статусом '
@@ -352,7 +376,7 @@ def check_refund_status() -> bool:
 
     try:
         tickets = Ticket.objects.filter(
-            refund_status=constants.waiting_refund,
+            status=constants.waiting_refund,
         ).select_related('event')
     except Exception as exc:
         logger.error(
@@ -361,23 +385,33 @@ def check_refund_status() -> bool:
         return False
 
     tickets_data = {}
-    for ticket in tickets:
-        data = check_refund.delay(
-            payment_id=ticket.payment_id,
-            refund_id=ticket.refund_id,
-        )
-        tickets_data[ticket.uuid] = data.get()
+    task_group = group(check_refund.s(
+        payment_id=ticket.payment_id,
+        refund_id=ticket.refund_id,
+        ticket_uuid=str(ticket.uuid),
+    ) for ticket in tickets)
+
+    result_group = task_group.apply_async()
+    results = result_group.join()
+
+    for result in results:
+        tickets_data.update(result)
 
     for ticket in tickets:
         data = tickets_data[ticket.uuid]
         refund_status = data['refund_status']
+        acquiring_status = data['acquiring_status']
 
-        ticket.refund_status = refund_status
-        #подсчет количества попыток проверки и статус эквайринга???
+        ticket.status = refund_status
+        ticket.acquiring_status = acquiring_status if acquiring_status else ticket.acquiring_status
+        ticket.status_updated = timezone.now()
+        ticket.check_count += 1
 
     if tickets:
         try:
-            Ticket.objects.bulk_update(tickets, ['refund_status'])
+            Ticket.objects.bulk_update(tickets, [
+                'status', 'acquiring_status', 'status_updated', 'check_count',
+            ])
         except Exception as exc:
             logger.error(
                 msg=f'Возникла ошибка при проверке возврата средств у билетов. '
