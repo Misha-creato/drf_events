@@ -1,6 +1,9 @@
+from typing import Any
+
 from celery import shared_task
 
 from django.urls import reverse
+from uuid import UUID
 
 from config.settings import (
     SITE_PROTOCOL,
@@ -62,7 +65,7 @@ def notify_users(event_data: dict, recipient_list: list, email_type: str) -> int
 
 
 @shared_task
-def check_bill(bill_id: str) -> int:
+def check_bill(bill_id: str) -> dict:
     '''
     Асинхронная проверка статуса счета
 
@@ -76,16 +79,20 @@ def check_bill(bill_id: str) -> int:
     status = payment.confirm_buying(
         bill_id=bill_id,
     )
-    return status
+    bill_data = {
+        bill_id: status,
+    }
+    return bill_data
 
 
 @shared_task
-def check_payment(payment_id: str) -> dict:
+def check_payment(payment_id: str, ticket_uuid: str) -> dict:
     '''
     Асинхронная проверка статуса платежа
 
     Args:
         payment_id: id платежа
+        ticket_uuid: id билета
 
     Returns:
         Код статуса и словарь данных
@@ -94,17 +101,22 @@ def check_payment(payment_id: str) -> dict:
     status, data = payment.check_payment(
         payment_id=payment_id,
     )
-    return data
+
+    ticket_data = {
+        ticket_uuid: data,
+    }
+    return ticket_data
 
 
 @shared_task
-def refund(payment_id: str, amount: str) -> dict:
+def refund(payment_id: str, amount: str, ticket_uuid: str) -> dict:
     '''
     Асинхронный возврат средств по платежу
 
     Args:
         payment_id: id платежа
         amount: сумма возрата
+        ticket_uuid: id билета
 
     Returns:
         Словарь данных
@@ -114,17 +126,21 @@ def refund(payment_id: str, amount: str) -> dict:
         payment_id=payment_id,
         amount=amount,
     )
-    return data
+    ticket_data = {
+        ticket_uuid: data,
+    }
+    return ticket_data
 
 
 @shared_task
-def check_refund(payment_id: str, refund_id: str) -> dict:
+def check_refund(payment_id: str, refund_id: str, ticket_uuid: str) -> dict:
     '''
     Асинхронная проверка статуса возрата средств
 
     Args:
         payment_id: id платежа
         refund_id: id возврата
+        ticket_uuid: id билета
 
     Returns:
         Словарь данных
@@ -134,4 +150,7 @@ def check_refund(payment_id: str, refund_id: str) -> dict:
         payment_id=payment_id,
         refund_id=refund_id,
     )
-    return data
+    ticket_data = {
+        ticket_uuid: data
+    }
+    return ticket_data
