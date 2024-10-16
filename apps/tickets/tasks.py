@@ -1,9 +1,6 @@
-from typing import Any
-
 from celery import shared_task
 
 from django.urls import reverse
-from uuid import UUID
 
 from config.settings import (
     SITE_PROTOCOL,
@@ -11,6 +8,7 @@ from config.settings import (
 )
 
 from notifications.services import Email
+
 from tickets.api import payment
 
 from utils.logger import get_logger
