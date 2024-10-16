@@ -619,6 +619,7 @@ class Payment:
             path=path,
         )
         data = {
+            'acquiring_status': None,
             'refund_status': constants.waiting_refund
         }
         if status != 200:
@@ -629,6 +630,8 @@ class Payment:
             return status, data
 
         refund_status = response_data['status']['value']
+        data['acquiring_status'] = refund_status
+
         if refund_status in self.refund_fail_statuses:
             logger.error(
                 msg=f'Ошибка возврата средств {refund_id} по платежу {payment_id}.'
