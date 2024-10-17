@@ -4,6 +4,7 @@ from celery import group
 
 from django.db.models import (
     Q,
+    F,
 )
 from django.utils import timezone
 
@@ -208,8 +209,6 @@ def check_payment_status() -> bool:
     try:
         tickets = Ticket.objects.filter(
             status=constants.waiting_payment,
-        ).exclude( #лучше бы убрать
-            event=None,
         ).select_related('event')
     except Exception as exc:
         logger.error(
@@ -237,8 +236,8 @@ def check_payment_status() -> bool:
 
         ticket.status = ticket_status
         ticket.acquiring_status = acquiring_status if acquiring_status else ticket.acquiring_status
-        ticket.check_count += 1
         ticket.status_updated = timezone.now()
+        ticket.check_count += 1
 
         if ticket_status == constants.canceled:
             filter_dict = {
@@ -249,13 +248,14 @@ def check_payment_status() -> bool:
             landing_filters.append(filter_dict)
 
         if ticket_status == constants.active:
-            if ticket.event.canceled:
-                ticket.status = constants.need_refund
+            ticket.check_count = 0
+            ticket.bought_at = timezone.now()
 
     if tickets:
         try:
             Ticket.objects.bulk_update(tickets, [
                 'status', 'acquiring_status', 'check_count', 'status_updated',
+                'bought_at',
             ])
         except Exception as exc:
             logger.error(
@@ -313,8 +313,15 @@ def need_refund() -> bool:
 
     try:
         tickets = Ticket.objects.filter(
-            status=constants.need_refund,
-        ).select_related('events')
+            Q(status=constants.need_refund) |
+            (
+                    (Q(event__isnull=True) | Q(event__canceled=True)) &
+                    Q(status=constants.active)
+            ) |
+            Q(event__end_at__lte=F('bought_at'))# start at or end_at??
+        ).exclude(
+            status__in=[constants.fail_refund, constants.success_refund]
+        ).select_related('event')
     except Exception as exc:
         logger.error(
             msg=f'Возникла ошибка при получении билетов для возврата средств: {exc}',
@@ -336,10 +343,10 @@ def need_refund() -> bool:
         tickets_data.update(result)
 
     for ticket in tickets:
-        data = tickets_data[ticket.uuid]
+        data = tickets_data[str(ticket.uuid)]
 
         refund_status = data['refund_status']
-        refund_id = data['refund_if']
+        refund_id = data['refund_id']
         ticket.status = refund_status
         ticket.refund_id = refund_id
         ticket.status_updated = timezone.now()
@@ -398,7 +405,7 @@ def check_refund_status() -> bool:
         tickets_data.update(result)
 
     for ticket in tickets:
-        data = tickets_data[ticket.uuid]
+        data = tickets_data[str(ticket.uuid)]
         refund_status = data['refund_status']
         acquiring_status = data['acquiring_status']
 
