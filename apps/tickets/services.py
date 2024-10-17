@@ -563,6 +563,7 @@ class Payment:
             'refund_id': refund_id,
             'refund_status': constants.need_refund
         }
+
         if status != 200:
             logger.error(
                 msg=f'Возникла ошибка при возврате средств по платежу {payment_id}:'
@@ -571,7 +572,7 @@ class Payment:
             return 500, data
 
         refund_status = response_data['status']['value']
-        if status in self.refund_fail_statuses:
+        if refund_status in self.refund_fail_statuses:
             logger.error(
                 msg=f'Не удалось осуществить возврат средств по платежу: {payment_id}.'
                     f'Статус возврата {refund_status}',
@@ -579,7 +580,7 @@ class Payment:
             data['refund_status'] = constants.fail_refund
             return 400, data #TODO
 
-        if status not in self.payment_success_statuses:
+        if refund_status not in self.refund_success_statuses:
             logger.error(
                 msg=f'Не удалось осуществить возврат средств по платежу: {payment_id} '
                     f'Неизвестный статус возврата {refund_status}',
@@ -622,6 +623,14 @@ class Payment:
             'acquiring_status': None,
             'refund_status': constants.waiting_refund
         }
+        if status == 404:
+            logger.error(
+                msg=f'Возникла ошибка при проверке статуса возврата средств {refund_id} '
+                    f'по платежу {payment_id}. Id возврата или платежа не найден',
+            )
+            data['refund_status'] = constants.fail_refund
+            return status, data
+
         if status != 200:
             logger.error(
                 msg=f'Не удалось проверить статус возврата средств {refund_id} '
