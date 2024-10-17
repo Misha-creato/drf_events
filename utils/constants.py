@@ -37,10 +37,10 @@ canceled = 'canceled'
 unknown = 'unknown'
 
 # REFUND STATUSES
-need_refund = 'need refund'
-waiting_refund = 'waiting refund'
-success_refund = 'success refund'
-fail_refund = 'fail refund'
+need_refund = 'need_refund'
+waiting_refund = 'waiting_refund'
+success_refund = 'success_refund'
+fail_refund = 'fail_refund'
 
 
 TICKET_STATUSES = (
