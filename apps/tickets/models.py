@@ -28,6 +28,7 @@ class Ticket(models.Model):
         on_delete=models.SET_NULL,
         related_name='tickets',
         null=True,
+        blank=True,
     )
     user = models.ForeignKey(
         verbose_name='Пользователь',
@@ -75,9 +76,14 @@ class Ticket(models.Model):
     payment_id = models.CharField(
         verbose_name='Id платежа',
     )
+    created_at = models.DateTimeField(
+        verbose_name='Дата и время создания',
+        auto_now_add=True,
+    )
     bought_at = models.DateTimeField(
         verbose_name='Дата и время покупки',
-        auto_now_add=True,
+        null=True,
+        blank=True,
     )
     notification_status = models.CharField(
         verbose_name='Статус оповещения',
