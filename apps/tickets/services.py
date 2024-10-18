@@ -678,6 +678,7 @@ def get_user_tickets(user: User) -> (int, list):
         200,
         [
             {
+                "uuid": "e7f5d696-a8fd-4d5d-9ea7-db7100903581",
                 "event_name": "Testing test2 event",
                 "section": "1",
                 "row": "2",
@@ -715,6 +716,7 @@ def get_user_tickets(user: User) -> (int, list):
 
 def check_ticket_qr(data: QueryDict) -> (int, dict):
     '''
+    Проверка данных qr билета
 
     Args:
         data: данные qr
