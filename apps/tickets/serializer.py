@@ -35,7 +35,9 @@ class SeatDataSerializer(serializers.Serializer):
 
 
 class TicketBuySerializer(serializers.Serializer):
-    event_id = serializers.IntegerField()
+    event_id = serializers.IntegerField(
+        min_value=1,
+    )
     seat_data = SeatDataSerializer()
     price = serializers.DecimalField(
         max_digits=7,
