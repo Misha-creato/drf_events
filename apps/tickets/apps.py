@@ -5,6 +5,3 @@ class TicketsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'tickets'
     verbose_name = 'Билеты'
-
-    def ready(self):
-        import tickets.signals
