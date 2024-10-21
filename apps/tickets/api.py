@@ -5,7 +5,6 @@ from rest_framework.views import APIView
 
 from tickets.doc import (
     Ticket200Response,
-    DefaultTicketResponse,
     TicketBuy200Response,
 )
 from tickets.serializer import (
@@ -18,7 +17,10 @@ from tickets.services import (
     Payment,
 )
 
-from utils.response_patterns import generate_response
+from utils.response_patterns import (
+    DefaultResponse,
+    generate_response,
+)
 
 
 payment = Payment()
@@ -31,7 +33,7 @@ class TicketView(APIView):
     @extend_schema(
         responses={
             200: Ticket200Response,
-            500: DefaultTicketResponse,
+            500: DefaultResponse,
         },
         description=Ticket200Response.__doc__,
         summary='Получение билетов пользователя',
@@ -56,10 +58,10 @@ class TicketQrView(APIView):
     @extend_schema(
         request=TicketQRSerializer,
         responses={
-            200: DefaultTicketResponse,
-            400: DefaultTicketResponse,
-            410: DefaultTicketResponse,
-            500: DefaultTicketResponse,
+            200: DefaultResponse,
+            400: DefaultResponse,
+            410: DefaultResponse,
+            500: DefaultResponse,
         },
         description='Проверка qr данных билета',
         summary='Проверка qr билета'
@@ -87,9 +89,9 @@ class TicketBuyView(APIView):
         request=TicketBuySerializer,
         responses={
             200: TicketBuy200Response,
-            400: DefaultTicketResponse,
-            404: DefaultTicketResponse,
-            500: DefaultTicketResponse,
+            400: DefaultResponse,
+            404: DefaultResponse,
+            500: DefaultResponse,
         },
         description=TicketBuy200Response.__doc__,
         summary='Покупка билета',

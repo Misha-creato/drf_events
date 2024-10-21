@@ -17,12 +17,14 @@ from events.services import (
 )
 from events.doc import (
     event_list_parameters,
-    DefaultEventResponse,
     EventList200Response,
     Event200Response,
 )
 
-from utils.response_patterns import generate_response
+from utils.response_patterns import (
+    DefaultResponse,
+    generate_response,
+)
 
 
 class EventListView(APIView):
@@ -55,7 +57,7 @@ class EventListView(APIView):
         parameters=event_list_parameters,
         responses={
             200: EventList200Response,
-            500: DefaultEventResponse,
+            500: DefaultResponse,
         },
         description=EventList200Response.__doc__,
         summary='Получение списка всех мероприятий',
@@ -81,8 +83,8 @@ class EventView(APIView):
     @extend_schema(
         responses={
             200: Event200Response,
-            404: DefaultEventResponse,
-            500: DefaultEventResponse,
+            404: DefaultResponse,
+            500: DefaultResponse,
         },
         description=Event200Response.__doc__,
         summary='Получение мероприятия по слагу',

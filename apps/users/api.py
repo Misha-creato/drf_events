@@ -5,17 +5,10 @@ from rest_framework.views import APIView
 
 from users.doc import (
     Auth200Response,
-    DefaultResponse,
     Register200Response,
     RefreshToken200Response,
-    Logout200Response,
-    ConfirmEmail200Response,
-    ConfirmEmailRequest200Response,
-    PasswordRestoreRequest200Response,
-    PasswordRestore200Response,
     Detail200Response,
     ChangePassword200Response,
-    Remove200Response,
 )
 from users.serializers import (
     RegisterSerializer,
@@ -25,10 +18,6 @@ from users.serializers import (
     PasswordRestoreSerializer,
     ChangePasswordSerializer,
 )
-from utils.response_patterns import (
-    generate_response,
-)
-
 from users.services import (
     register,
     auth,
@@ -41,6 +30,11 @@ from users.services import (
     change_password,
     remove,
     confirm_email_request,
+)
+
+from utils.response_patterns import (
+    DefaultResponse,
+    generate_response,
 )
 
 
@@ -103,6 +97,13 @@ class AuthView(APIView):
         )
 
 
+class GoogleAuth(APIView):
+
+    def post(self, request):
+        pass
+
+
+
 class RefreshTokenView(APIView):
 
     @extend_schema(
@@ -138,12 +139,12 @@ class LogoutView(APIView):
     @extend_schema(
         request=RefreshAndLogoutSerializer,
         responses={
-            200: Logout200Response,
+            200: DefaultResponse,
             400: DefaultResponse,
             500: DefaultResponse,
         },
-        description=Logout200Response.__doc__,
-        summary='Выход из системы пользователя',
+        description='Выход из системы пользователя',
+        summary='Выход из системы',
     )
     def post(self, request):
         data = request.data
@@ -166,12 +167,12 @@ class ConfirmEmailView(APIView):
 
     @extend_schema(
         responses={
-            200: ConfirmEmail200Response,
+            200: DefaultResponse,
             404: DefaultResponse,
             500: DefaultResponse,
         },
-        description=ConfirmEmail200Response.__doc__,
-        summary='Подтверждение email пользователя',
+        description='Подтверждение email пользователя',
+        summary='Подтверждение email',
     )
     def get(self, request, url_hash):
         status_code, response_data = confirm_email(
@@ -194,13 +195,13 @@ class ConfirmEmailRequestView(APIView):
     @extend_schema(
         request=None,
         responses={
-            200: ConfirmEmailRequest200Response,
+            200: DefaultResponse,
             403: DefaultResponse,
             500: DefaultResponse,
             501: DefaultResponse,
         },
-        description=ConfirmEmailRequest200Response.__doc__,
-        summary='Запрос на подтверждение email пользователя',
+        description='Запрос на отправку письма для подтверждения email пользователя',
+        summary='Запрос на подтверждение email',
     )
     def post(self, request):
         user = request.user
@@ -224,15 +225,15 @@ class PasswordRestoreRequestView(APIView):
     @extend_schema(
         request=PasswordRestoreRequestSerializer,
         responses={
-            200: PasswordRestoreRequest200Response,
+            200: DefaultResponse,
             400: DefaultResponse,
             403: DefaultResponse,
             404: DefaultResponse,
             500: DefaultResponse,
             501: DefaultResponse,
         },
-        description=PasswordRestoreRequest200Response.__doc__,
-        summary='Запрос на восстановление пароля пользователя',
+        description='Запрос на восстановление пароля пользователя',
+        summary='Запрос на восстановление пароля',
     )
     def post(self, request):
         data = request.data
@@ -256,13 +257,13 @@ class PasswordRestoreView(APIView):
     @extend_schema(
         request=PasswordRestoreSerializer,
         responses={
-            200: PasswordRestore200Response,
+            200: DefaultResponse,
             400: DefaultResponse,
             404: DefaultResponse,
             500: DefaultResponse,
         },
-        description=PasswordRestore200Response.__doc__,
-        summary='Восстановление пароля пользователя',
+        description='Восстановление пароля пользователя',
+        summary='Восстановление пароля',
     )
     def post(self, request, url_hash):
         data = request.data
@@ -313,7 +314,7 @@ class CustomUserView(APIView):
             500: DefaultResponse,
         },
         description=ChangePassword200Response.__doc__,
-        summary='Смена пароля пользователя',
+        summary='Смена пароля',
     )
     def post(self, request):
         data = request.data
@@ -333,10 +334,10 @@ class CustomUserView(APIView):
 
     @extend_schema(
         responses={
-            200: Remove200Response,
+            200: DefaultResponse,
             500: DefaultResponse,
         },
-        description=Remove200Response.__doc__,
+        description='Удаление пользователя',
         summary='Удаление пользователя',
     )
     def delete(self, request):
