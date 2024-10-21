@@ -5,6 +5,8 @@ from django.db import IntegrityError
 from django.http import QueryDict
 from django.urls import reverse
 
+from google_auth_oauthlib.flow import Flow
+
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from config.settings import SITE_PROTOCOL
@@ -31,6 +33,7 @@ from utils.logger import (
 )
 
 
+CLIENT_SECRETS_FILE = 'path/to/client_secret.json'#todo
 logger = get_logger(__name__)
 
 
@@ -200,6 +203,30 @@ def auth(data: QueryDict) -> (int, dict):
     logger.info(
         msg=f'Успешная аутентификация пользователя с данными: {user_data}',
     )
+    return 200, response_data
+
+
+def get_google_auth_link() -> (int, dict):
+    '''
+    Получение ссылки для авторизации через google
+
+    Returns:
+    Код статуса и словарь данных
+    '''
+
+    logger.info(
+        msg=f'Получение ссылки для авторизации через google',
+    )
+
+    flow = Flow.from_client_secrets_file(
+        client_secrets_file=CLIENT_SECRETS_FILE,
+        scopes=['email'],
+    )
+
+    authorization_url, state = flow.authorization_url()
+    response_data = {
+        'google_auth_url': authorization_url,
+    }
     return 200, response_data
 
 
