@@ -1,13 +1,6 @@
 from rest_framework import serializers
 
-
-class DefaultResponse(serializers.Serializer):
-    message = serializers.CharField(
-        default='Сообщение',
-    )
-    data = serializers.JSONField(
-        default={},
-    )
+from utils.response_patterns import DefaultResponse
 
 
 class Register200Response(DefaultResponse):
@@ -52,44 +45,9 @@ class RefreshToken200Response(DefaultResponse):
     )
 
 
-class Logout200Response(DefaultResponse):
-    '''
-    Выход из системы пользователя
-
-    '''
-
-
-class ConfirmEmail200Response(DefaultResponse):
-    '''
-    Подтверждение email пользователя
-
-    '''
-
-
-class ConfirmEmailRequest200Response(DefaultResponse):
-    '''
-    Запрос на отправку письма для подтверждения email пользователя
-
-    '''
-
-
-class PasswordRestoreRequest200Response(DefaultResponse):
-    '''
-    Запрос на восстановление пароля пользователя
-
-    '''
-
-
-class PasswordRestore200Response(DefaultResponse):
-    '''
-    Восстановление пароля пользователя
-
-    '''
-
-
 class Detail200Response(DefaultResponse):
     '''
-    Данные пользователя
+    Получение детальных данных пользователя
 
     '''
 
@@ -113,10 +71,3 @@ class ChangePassword200Response(DefaultResponse):
             "email_confirmed": True,
         }
     )
-
-
-class Remove200Response(DefaultResponse):
-    '''
-    Удаление пользователя
-
-    '''

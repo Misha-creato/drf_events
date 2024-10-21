@@ -1,16 +1,9 @@
 from rest_framework import serializers
 
-
-class DefaultTicketResponse(serializers.Serializer):
-    message = serializers.CharField(
-        default='Сообщение',
-    )
-    data = serializers.JSONField(
-        default={},
-    )
+from utils.response_patterns import DefaultResponse
 
 
-class Ticket200Response(DefaultTicketResponse):
+class Ticket200Response(DefaultResponse):
     '''
     Получение всех билетов авторизованного пользователя
 
@@ -31,7 +24,7 @@ class Ticket200Response(DefaultTicketResponse):
     )
 
 
-class TicketBuy200Response(DefaultTicketResponse):
+class TicketBuy200Response(DefaultResponse):
     '''
     Покупка билета по данным пользователем
 

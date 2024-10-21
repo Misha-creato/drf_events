@@ -3,17 +3,10 @@ from drf_spectacular.utils import OpenApiParameter
 
 from rest_framework import serializers
 
-
-class DefaultEventResponse(serializers.Serializer):
-    message = serializers.CharField(
-        default='Сообщение',
-    )
-    data = serializers.JSONField(
-        default={},
-    )
+from utils.response_patterns import DefaultResponse
 
 
-class EventList200Response(DefaultEventResponse):
+class EventList200Response(DefaultResponse):
     '''
     Получение списка всех активных мероприятий, поиск, фильтрация по параметрам
 
@@ -42,7 +35,7 @@ class EventList200Response(DefaultEventResponse):
     )
 
 
-class Event200Response(DefaultEventResponse):
+class Event200Response(DefaultResponse):
     '''
     Получение детальной информации о мероприятии по слагу
 
