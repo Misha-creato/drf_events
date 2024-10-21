@@ -1,3 +1,6 @@
+from rest_framework import serializers
+
+
 status_messages = {
     200: 'Успешный успех',
     201: 'Создано',
@@ -11,6 +14,16 @@ status_messages = {
     500: 'Ошибка сервера',
     501: 'Не поддерживается',
 }
+
+
+class DefaultResponse(serializers.Serializer):
+    message = serializers.CharField(
+        default='Сообщение',
+    )
+    data = serializers.JSONField(
+        default={},
+    )
+
 
 
 def generate_response(status_code: int, data: dict | None = None) -> (int, dict):
