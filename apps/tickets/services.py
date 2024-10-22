@@ -14,6 +14,7 @@ from config.settings import (
     PAYMENT_HOST,
     PAYMENT_AUTHORIZATION_TOKEN,
     PAYMENT_SITE_ID,
+    TZ_FOR_PAYMENT,
 )
 
 from events.models import Event, Landing
@@ -23,7 +24,10 @@ from tickets.serializer import (
     TicketQRSerializer,
     TicketBuySerializer,
 )
-from tickets.models import Ticket
+from tickets.models import (
+    Ticket,
+    TicketSettings,
+)
 
 from utils import (
     redis_cache,
@@ -260,8 +264,23 @@ class Payment:
             msg=f'Создание счета для оплаты билета {data} пользователю {user}',
         )
         price = str(data['price'])
+        status, ticket_settings = redis_cache.get(
+            key='ticket_settings',
+            model=TicketSettings,
+            timeout=60 * 60,
+            pk=1,
+        )
+        if status != 200:
+            logger.error(
+                msg=f'Не осуществить покупку билета {data} '
+                    f'Настройки билетов не найдены',
+            )
+            return status, {}
+
+        payment_timeout = ticket_settings['payment_timeout']
         # у qiwi время идет с опозданием на 11 минут
-        expiration_datetime = datetime.now().isoformat(timespec='seconds') + '+05:00'
+        expiration_datetime = (datetime.now() + timedelta(minutes=payment_timeout)
+                               ).isoformat(timespec='seconds') + TZ_FOR_PAYMENT
         bill_data = {
             "amount": {
                 "currency": "KZT",
@@ -294,10 +313,12 @@ class Payment:
             'price': price,
             'event': event_id,
         }
+
+        temporary_timeout = ticket_settings['temporary_timeout']
         status = redis_cache.set_key(
             key=key,
             data=ticket_data,
-            time=600,
+            time=temporary_timeout,
         )
         if status != 200:
             logger.error(
