@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from users.doc import (
     Auth200Response,
+    GoogleAuth200Response,
     Register200Response,
     RefreshToken200Response,
     Detail200Response,
@@ -19,6 +20,8 @@ from users.serializers import (
     ChangePasswordSerializer,
 )
 from users.services import (
+    get_google_auth_link,
+    google_callback,
     register,
     auth,
     refresh_token,
@@ -99,9 +102,52 @@ class AuthView(APIView):
 
 class GoogleAuth(APIView):
 
-    def post(self, request):
-        pass
+    @extend_schema(
+        request=AuthSerializer,
+        responses={
+            200: GoogleAuth200Response,
+        },
+        description=GoogleAuth200Response.__doc__,
+        summary='Получение ссылки для авторизации',
+    )
+    def get(self, request):
+        status_code, response_data = get_google_auth_link()
+        status, data = generate_response(
+            status_code=status_code,
+            data=response_data,
+        )
+        return Response(
+            status=status,
+            data=data,
+        )
 
+
+class GoogleCallback(APIView):
+
+    @extend_schema(
+        request=AuthSerializer,
+        responses={
+            200: Auth200Response,
+            400: DefaultResponse,
+            401: DefaultResponse,
+            500: DefaultResponse,
+        },
+        description='Авторизация пользователя через Google',
+        summary='Авторизация Google',
+    )
+    def get(self, request):
+        code = request.query_params.get('code')
+        status_code, response_data = google_callback(
+            code=code,
+        )
+        status, data = generate_response(
+            status_code=status_code,
+            data=response_data,
+        )
+        return Response(
+            status=status,
+            data=data,
+        )
 
 
 class RefreshTokenView(APIView):
