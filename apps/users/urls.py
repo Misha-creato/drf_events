@@ -1,6 +1,8 @@
 from django.urls import path
 
 from users.api import (
+    GoogleAuth,
+    GoogleCallback,
     RegisterView,
     AuthView,
     RefreshTokenView,
@@ -28,6 +30,16 @@ urlpatterns = [
         'auth/',
         AuthView.as_view(),
         name='auth',
+    ),
+    path(
+        'auth/google/',
+        GoogleAuth.as_view(),
+        name='google_auth',
+    ),
+    path(
+        'auth/callback/',
+        GoogleCallback.as_view(),
+        name='google_callback',
     ),
     path(
         'auth/refresh/',
