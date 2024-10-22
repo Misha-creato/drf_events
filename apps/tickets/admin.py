@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from tickets.models import Ticket
+from solo.admin import SingletonModelAdmin
+
+from tickets.models import (
+    Ticket,
+    TicketSettings,
+)
 
 
 @admin.register(Ticket)
@@ -25,5 +30,12 @@ class TicketAdmin(admin.ModelAdmin):
         'row',
         'seat',
         'price',
-        # 'status',
+        'bought_at',
+        'created_at',
+        'status',
     ]
+
+
+@admin.register(TicketSettings)
+class TicketsSettingsAdmin(SingletonModelAdmin):
+    pass

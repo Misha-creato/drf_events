@@ -3,6 +3,8 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from solo.models import SingletonModel
+
 from events.models import Event
 
 from utils.constants import (
@@ -114,3 +116,25 @@ class Ticket(models.Model):
         db_table = 'tickets'
         verbose_name = 'Билет'
         verbose_name_plural = 'Билеты'
+
+
+class TicketSettings(SingletonModel):
+    temporary_timeout = models.PositiveIntegerField(
+        verbose_name='Время жизни временной брони',
+        default=60*15,
+    )
+    payment_timeout = models.PositiveIntegerField(
+        verbose_name='Время жизни платежа',
+        default=60*3,
+    )
+    payment_attempts_number = models.PositiveIntegerField(
+        verbose_name='Количество попыток проверки платежа',
+        default=20,
+    )
+
+    def __str__(self):
+        return ''
+
+    class Meta:
+        db_table = 'tickets_settings'
+        verbose_name = 'Настройки билетов'
