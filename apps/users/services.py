@@ -5,11 +5,16 @@ from django.db import IntegrityError
 from django.http import QueryDict
 from django.urls import reverse
 
-from google_auth_oauthlib.flow import Flow
-
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from config.settings import SITE_PROTOCOL
+from config.settings import (
+    CLIENT_ID,
+    CLIENT_SECRET,
+    SITE_PROTOCOL,
+)
+
+from google_custom_oauth2.google_oauth import GoogleOAuth
+
 from notifications.services import Email
 
 from users.models import CustomUser
@@ -33,8 +38,13 @@ from utils.logger import (
 )
 
 
-CLIENT_SECRETS_FILE = 'path/to/client_secret.json'#todo
 logger = get_logger(__name__)
+oauth = GoogleOAuth(
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    redirect_uri='http://127.0.0.1:8000/api/v1/users/auth/callback/',
+    scope=['openid', 'email'],
+)
 
 
 def register(data: QueryDict, host: str) -> (int, dict):
@@ -211,22 +221,116 @@ def get_google_auth_link() -> (int, dict):
     Получение ссылки для авторизации через google
 
     Returns:
-    Код статуса и словарь данных
+        Код статуса и словарь данных
+        200,
+        {
+            "google_auth_url": "https://accounts.google.com/o/oauth2/v2/auth?
+             scope=https%3A//www.googleapis.com/auth/drive.metadata.readonly&
+             access_type=offline&
+             include_granted_scopes=true&
+             response_type=code&
+             state=state_parameter_passthrough_value&
+             redirect_uri=https%3A//oauth2.example.com/code&
+             client_id=client_id"
+        }
     '''
 
     logger.info(
         msg=f'Получение ссылки для авторизации через google',
     )
 
-    flow = Flow.from_client_secrets_file(
-        client_secrets_file=CLIENT_SECRETS_FILE,
-        scopes=['email'],
+    state = str(uuid.uuid4())
+    auth_url = oauth.get_auth_url(
+        state=state,
     )
 
-    authorization_url, state = flow.authorization_url()
     response_data = {
-        'google_auth_url': authorization_url,
+        'google_auth_url': auth_url,
     }
+    return 200, response_data
+
+
+def google_callback(code: str) -> (int, dict):
+    '''
+    Авторизация через Google
+
+    Args:
+        code: авторизационный код от Google
+
+    Returns:
+        Код статуса и словарь данных
+    '''
+
+    logger.info(
+        msg='Авторизация пользователя через google',
+    )
+
+    if not code:
+        logger.error(
+            msg='Не удалось авторизовать пользователя через google: '
+                'отсутствие авторизационного кода',
+        )
+        return 400, {}#todo
+
+    status, response = oauth.exchange_code_for_tokens(
+        code=code,
+    )
+    if status != 200:
+        logger.error(
+            msg='Не удалось авторизовать пользователя через google: '
+                'Ошибка получения токенов',
+        )
+        return 500, {}#todo
+
+    id_token = response['id_token']
+
+    status, response = oauth.verify_id_token(
+        id_token=id_token,
+    )
+    if status != 200:
+        logger.error(
+            msg='Не удалось авторизовать пользователя через google: '
+                'Ошибка получения данных пользователя',
+        )
+        return 500, {}#todo
+
+    email = response['email']
+    try:
+        user, created = CustomUser.objects.get_or_create(
+            email=email,
+        )
+        if created:
+            random_password = CustomUser.objects.make_random_password()
+            user.set_password(random_password)
+            user.save()
+    except Exception as exc:
+        logger.error(
+            msg=f'Возникла ошибка при авторизации пользователя через google: '
+                f'{exc}',
+        )
+        return 500, {}
+
+    try:
+        token = RefreshToken.for_user(
+            user=user,
+        )
+    except Exception as exc:
+        logger.error(
+            msg=f'Не удалось получить токен для авторизации пользователя '
+                f'через google: {exc}',
+        )
+        return 500, {}
+
+    token['email'] = user.email
+    refresh = str(token)
+    access = str(token.access_token)
+    response_data = {
+        'refresh': refresh,
+        'access': access,
+    }
+    logger.info(
+        msg='Успешная авторизация пользователя через google',
+    )
     return 200, response_data
 
 
