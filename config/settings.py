@@ -213,6 +213,8 @@ USE_I18N = True
 
 USE_TZ = True
 
+TZ_FOR_PAYMENT = '+05:00'
+
 # Site
 
 SITE_PROTOCOL = os.environ.get(
@@ -272,4 +274,14 @@ PAYMENT_SITE_ID = os.environ.get(
 )
 PAYMENT_AUTHORIZATION_TOKEN = os.environ.get(
     'PAYMENT_AUTHORIZATION_TOKEN', ''
+)
+
+
+# Google OAUTH:
+
+CLIENT_ID = os.environ.get(
+    'CLIENT_ID', ''
+)
+CLIENT_SECRET = os.environ.get(
+    'CLIENT_SECRET', '',
 )
